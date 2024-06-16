@@ -1,0 +1,24 @@
+{
+	"name": "Codespaces Rust Starter",
+	"customizations": {
+		"vscode": {
+			"extensions": [
+				"cschleiden.vscode-github-actions",
+				"ms-vsliveshare.vsliveshare",
+				"vadimcn.vscode-lldb",
+				"ms-azuretools.vscode-docker",
+				"1YiB.rust-bundle",
+				"DavidAnson.vscode-markdownlint"
+			],
+			"settings": {
+				"editor.formatOnSave": true,
+				"terminal.integrated.shell.linux": "/usr/bin/fish",
+				"files.exclude": {
+					"**/CODE_OF_CONDUCT.md": true,
+					"**/LICENSE": true
+				}
+			}
+		}
+	},
+	"dockerFile": "Dockerfile"
+}
