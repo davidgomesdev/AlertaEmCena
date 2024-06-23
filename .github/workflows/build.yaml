@@ -1,0 +1,58 @@
+name: Build
+
+on:
+  push:
+    # On main, it's the build and release that will run
+    branches-ignore: [ "main" ]
+
+jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      server: ${{ steps.filter.outputs.server }}
+      app: ${{ steps.filter.outputs.app }}
+    steps:
+    - uses: actions/checkout@v3
+
+    - uses: dorny/paths-filter@v2
+      id: filter
+      with:
+        filters: |
+          server:
+            - 'server/src/**'
+            - 'server/Cargo.lock'
+            - 'server/Cargo.toml'
+            - 'server/Cross.toml'
+
+  service:
+    runs-on: ubuntu-latest
+    needs: detect-changes
+    if: ${{ needs.detect-changes.outputs.server == 'true' }}
+    
+    env:
+      CARGO_TERM_COLOR: always
+
+    defaults:
+      run:
+        shell: bash
+        working-directory: ./server
+
+    steps:
+    - uses: rui314/setup-mold@v1
+
+    - uses: actions/checkout@v3
+    
+    - name: 🌱 - Install project dependencies
+      run: sudo apt-get update; sudo apt-get install -y libudev-dev libsystemd-dev libusb-1.0-0-dev
+    
+    - name: 🧯 - Check for compile errors
+      run: cargo check -q
+    
+    - name: 🧐 - Lint check
+      run: cargo clippy -- -D warnings
+
+    - name: 🔨 - Build
+      run: cargo build -q
+
+    - name: 🧪 - Run tests
+      run: cargo test -q

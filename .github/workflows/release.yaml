@@ -1,0 +1,91 @@
+name: Release
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}
+
+jobs:
+  build-server:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        build: [amd64, armhf, aarch64]
+        include:
+        - build: amd64
+          os: ubuntu-latest
+          rust: stable
+          target: x86_64-unknown-linux-gnu
+        - build: armhf
+          os: ubuntu-latest
+          rust: stable
+          target: armv7-unknown-linux-gnueabihf
+        - build: aarch64
+          os: ubuntu-latest
+          rust: stable
+          target: aarch64-unknown-linux-gnu
+
+    env:
+      CARGO_TERM_COLOR: always
+
+    defaults:
+      run:
+        shell: bash
+        working-directory: ./server
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: 🦀 - Install Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: ${{ matrix.rust }}
+        target: ${{ matrix.target }}
+        override: true
+
+    - name: 🌱 - Install dependencies
+      run: cargo install cross --git https://github.com/cross-rs/cross
+
+    - name: 🔨 - Build
+      run: >
+        cross build --release --target ${{ matrix.target }} && \
+          mv target/**/release/rusty_controller server-${{ matrix.build }}
+
+    - name: 📦 - Copy artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: server-${{ matrix.build }}
+        path: server/server-${{ matrix.build }}
+        if-no-files-found: error
+
+  release:
+    needs: [build-server]
+    runs-on: ubuntu-latest
+    # Prevents any manual run from triggering a new GH release
+    if: github.ref_name == 'main' && github.event_name == 'push'
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: 📦 - Copy server artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: artifacts/
+        merge-multiple: true
+
+    - name: 🧐 - Display structure of downloaded artifacts
+      run: ls -R artifacts/
+
+    - name: Semantic Release
+      uses: cycjimmy/semantic-release-action@v4
+      with:
+        branches: |
+          [
+            'main',
+          ]
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
