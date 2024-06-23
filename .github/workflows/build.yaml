@@ -10,7 +10,6 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       server: ${{ steps.filter.outputs.server }}
-      app: ${{ steps.filter.outputs.app }}
     steps:
     - uses: actions/checkout@v3
 
@@ -19,12 +18,12 @@ jobs:
       with:
         filters: |
           server:
-            - 'server/src/**'
-            - 'server/Cargo.lock'
-            - 'server/Cargo.toml'
-            - 'server/Cross.toml'
+            - 'src/**'
+            - 'Cargo.lock'
+            - 'Cargo.toml'
+            - 'Cross.toml'
 
-  service:
+  server:
     runs-on: ubuntu-latest
     needs: detect-changes
     if: ${{ needs.detect-changes.outputs.server == 'true' }}
@@ -35,15 +34,12 @@ jobs:
     defaults:
       run:
         shell: bash
-        working-directory: ./server
+        working-directory: .
 
     steps:
     - uses: rui314/setup-mold@v1
 
     - uses: actions/checkout@v3
-    
-    - name: 🌱 - Install project dependencies
-      run: sudo apt-get update; sudo apt-get install -y libudev-dev libsystemd-dev libusb-1.0-0-dev
     
     - name: 🧯 - Check for compile errors
       run: cargo check -q

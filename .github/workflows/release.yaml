@@ -35,7 +35,7 @@ jobs:
     defaults:
       run:
         shell: bash
-        working-directory: ./server
+        working-directory: .
 
     steps:
     - uses: actions/checkout@v3
@@ -59,7 +59,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: server-${{ matrix.build }}
-        path: server/server-${{ matrix.build }}
+        path: server-${{ matrix.build }}
         if-no-files-found: error
 
   release:
