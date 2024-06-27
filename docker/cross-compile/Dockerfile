@@ -8,4 +8,5 @@ RUN apt-get update && apt-get -y install libudev-dev:$CROSS_DEB_ARCH libsystemd-
 RUN apt-get update && apt-get install -y \
         openssl:$CROSS_DEB_ARCH \
         libssl-dev:$CROSS_DEB_ARCH \
-        pkg-config:$CROSS_DEB_ARCH
+        pkg-config:$CROSS_DEB_ARCH \
+        libssh-dev:$CROSS_DEB_ARCH
