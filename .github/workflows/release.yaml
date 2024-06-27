@@ -53,7 +53,7 @@ jobs:
     - name: 🔨 - Build
       run: >
         cross build --release --target ${{ matrix.target }} && \
-          mv target/**/release/rusty_controller server-${{ matrix.build }}
+          mv target/**/release/alertaemcena server-${{ matrix.build }}
 
     - name: 📦 - Copy artifact
       uses: actions/upload-artifact@v4
