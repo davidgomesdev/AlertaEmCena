@@ -8,3 +8,4 @@ lazy_static = "1.5.0"
 reqwest = "0.12"
 scraper = "0.19"
 tokio = { version = "1", features = ["full"] }
+openssl = { version = "0.10", features = ["vendored"] }
