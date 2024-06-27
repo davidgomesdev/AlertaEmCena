@@ -2,7 +2,7 @@ name: Release
 
 on:
   push:
-    branches: ["main"]
+    branches: ["main", "feat/scrape-info"]
   workflow_dispatch:
 
 concurrency:
