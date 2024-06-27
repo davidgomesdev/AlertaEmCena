@@ -4,5 +4,5 @@ use scraper::scrape_bol;
 
 #[tokio::main]
 async fn main() {
-  println!("{:?}", scrape_bol().await)
+  println!("{:?}", scrape_bol().await.unwrap())
 }
