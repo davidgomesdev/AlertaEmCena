@@ -16,14 +16,15 @@ lazy_static! {
     static ref PIECES_SELECTOR: Selector = Selector::parse(".itens").unwrap();
     static ref PIECE_DETAILS_SELECTOR: Selector =
         Selector::parse(".item-montra.evento > .overlay > .nome").unwrap();
-
     static ref PIECE_IMAGE_SELECTOR: Selector = Selector::parse("#ImagemEvento").unwrap();
     static ref PIECE_DATES_SELECTOR: Selector = Selector::parse(".datas > .sessao").unwrap();
     static ref PIECE_DATE_DAY_SELECTOR: Selector = Selector::parse(".dia").unwrap();
     static ref PIECE_DATE_MONTH_SELECTOR: Selector = Selector::parse(".mes").unwrap();
     static ref PIECE_DATE_YEAR_SELECTOR: Selector = Selector::parse(".ano").unwrap();
     static ref PIECE_PLACE_SELECTOR: Selector = Selector::parse(".detalhes > h4").unwrap();
-    static ref PIECE_ADDRESS_SELECTOR: Selector = Selector::parse(".localizacao-entidade > .clearfix > .col-sm-6 > div").unwrap();
+    static ref PIECE_ADDRESS_SELECTOR: Selector =
+        Selector::parse(".localizacao-entidade > .clearfix > .col-sm-6 > div").unwrap();
+    static ref LINK_SELECTOR: Selector = Selector::parse("a").unwrap();
 }
 
 #[derive(Debug, Clone)]
@@ -32,14 +33,14 @@ pub struct Piece {
     pub url: String,
     pub thumbnail_url: String,
     pub date_range: (NaiveDate, NaiveDate),
-    pub location: PieceLocation
+    pub location: PieceLocation,
 }
 
 #[derive(Debug, Clone)]
 pub struct PieceLocation {
-    pub city: String,
-    pub street: String,
-    pub place: String
+    pub city: Option<String>,
+    pub address: Option<String>,
+    pub place: String,
 }
 
 impl Piece {
@@ -48,12 +49,14 @@ impl Piece {
         piece_path: &str,
         thumbnail_url: &str,
         date_range: (NaiveDate, NaiveDate),
+        location: PieceLocation,
     ) -> Piece {
         Piece {
             name: name.to_string(),
             url: format!("{}{}", BOL_BASE_URL.to_owned(), piece_path),
             thumbnail_url: thumbnail_url.to_string(),
             date_range,
+            location,
         }
     }
 }
@@ -96,18 +99,73 @@ async fn scrape_piece(element: ElementRef<'_>) -> Piece {
     // TODO: fix this failing when the dates are only one day (not a range)
     let dates: Vec<NaiveDate> = piece_html
         .select(&PIECE_DATES_SELECTOR)
-        .map(|el| parse_date_element(el)).collect();
+        .map(|el| parse_date_element(el))
+        .collect();
 
-    let start_date = dates.first().unwrap_or_else(|| panic!("No dates were found for piece '{}'", name));
+    let start_date = dates
+        .first()
+        .unwrap_or_else(|| panic!("No dates were found for piece '{}'", name));
     let end_date = match dates.len() {
         1 => start_date,
         2 => dates.last().unwrap(),
-        _ => panic!("Dates for piece '{}' has a weird date count: {}", name, dates.len())
+        _ => panic!(
+            "Dates for piece '{}' has a weird date count: {}",
+            name,
+            dates.len()
+        ),
     };
+
+    let location = scrape_piece_location(piece_html.to_owned());
 
     info!("Scraped {}", name);
 
-    Piece::new(&name, piece_path, thumbnail_url, (*start_date, *end_date))
+    Piece::new(
+        &name,
+        piece_path,
+        thumbnail_url,
+        (*start_date, *end_date),
+        location,
+    )
+}
+
+fn scrape_piece_location(html: Html) -> PieceLocation {
+    let place = {
+        let el = html.select(&PIECE_PLACE_SELECTOR).next().unwrap();
+
+        el.select(&LINK_SELECTOR)
+            .map(|el| el.inner_html().to_string())
+            .next()
+            .unwrap_or_else(|| el.inner_html())
+    }
+    .trim()
+    .to_owned();
+
+    match html.select(&PIECE_ADDRESS_SELECTOR).next() {
+        Some(el) => {
+            let full_address = el.inner_html().to_string();
+            let mut full_address = full_address.lines();
+
+            let address = full_address.next().unwrap().to_string();
+            let city = full_address
+                .next()
+                .unwrap()
+                .split(' ')
+                .last()
+                .unwrap()
+                .to_string();
+
+            PieceLocation {
+                city: Some(city),
+                address: Some(address),
+                place,
+            }
+        }
+        None => PieceLocation {
+            city: None,
+            address: None,
+            place,
+        },
+    }
 }
 
 async fn crawl_page(url: String) -> Result<Html, Box<dyn Error>> {
