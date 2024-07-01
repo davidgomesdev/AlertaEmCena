@@ -16,11 +16,14 @@ lazy_static! {
     static ref PIECES_SELECTOR: Selector = Selector::parse(".itens").unwrap();
     static ref PIECE_DETAILS_SELECTOR: Selector =
         Selector::parse(".item-montra.evento > .overlay > .nome").unwrap();
+
     static ref PIECE_IMAGE_SELECTOR: Selector = Selector::parse("#ImagemEvento").unwrap();
     static ref PIECE_DATES_SELECTOR: Selector = Selector::parse(".datas > .sessao").unwrap();
     static ref PIECE_DATE_DAY_SELECTOR: Selector = Selector::parse(".dia").unwrap();
     static ref PIECE_DATE_MONTH_SELECTOR: Selector = Selector::parse(".mes").unwrap();
     static ref PIECE_DATE_YEAR_SELECTOR: Selector = Selector::parse(".ano").unwrap();
+    static ref PIECE_PLACE_SELECTOR: Selector = Selector::parse(".detalhes > h4").unwrap();
+    static ref PIECE_ADDRESS_SELECTOR: Selector = Selector::parse(".localizacao-entidade > .clearfix > .col-sm-6 > div").unwrap();
 }
 
 #[derive(Debug, Clone)]
@@ -29,6 +32,14 @@ pub struct Piece {
     pub url: String,
     pub thumbnail_url: String,
     pub date_range: (NaiveDate, NaiveDate),
+    pub location: PieceLocation
+}
+
+#[derive(Debug, Clone)]
+pub struct PieceLocation {
+    pub city: String,
+    pub street: String,
+    pub place: String
 }
 
 impl Piece {
