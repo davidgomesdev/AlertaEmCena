@@ -1,10 +1,11 @@
 use std::error::Error;
 
 use chrono::NaiveDate;
+use itertools::Itertools;
 use lazy_static::lazy_static;
 
 use scraper::{selectable::Selectable, ElementRef, Html, Selector};
-use tracing::info;
+use tracing::{error, info, warn};
 
 const BOL_BASE_URL: &str = "https://www.bol.pt";
 
@@ -74,29 +75,43 @@ pub async fn scrape_bol() -> Result<Vec<Piece>, Box<dyn Error>> {
             .map(|el| scrape_piece(el)),
     )
     .await;
+    let piece_titles = piece_titles
+        .into_iter()
+        .filter_map(|p| p.ok())
+        .collect_vec();
 
     Ok(piece_titles)
 }
 
-async fn scrape_piece(element: ElementRef<'_>) -> Piece {
+async fn scrape_piece(element: ElementRef<'_>) -> Result<Piece, Box<dyn Error>> {
     let piece_path = element
         .attr("href")
-        .unwrap_or_else(|| panic!("Got invalid link on {}", element.html()));
+        .ok_or_else(|| Err(format!("Got invalid link on {}", element.html())));
 
-    let piece_html = crawl_page(format!("{}{}", BOL_BASE_URL.to_owned(), piece_path))
-        .await
-        .expect("fix");
+    let piece_html = crawl_page(format!(
+        "{}{}",
+        BOL_BASE_URL.to_owned(),
+        piece_path
+    ))
+    .await
+    .inspect_err(|err| error!("Failed to crawl piece page (reason {})", err))?;
 
     info!("Crawled {}", piece_path);
 
     let thumbnail_url = piece_html
         .select(&PIECE_IMAGE_SELECTOR)
         .next()
-        .unwrap_or_else(|| panic!("No image found on {}", element.html()))
-        .attr("src")
-        .unwrap_or_else(|| panic!("No image URL found on {}", element.html()));
+        .map(|el| {
+            el.attr("src").unwrap_or_else(|| {
+                warn!("No image URL found on {}", element.html());
+                ""
+            })
+        })
+        .unwrap_or_else(|| {
+            warn!("No image found on {}", element.html());
+            ""
+        });
     let name = element.inner_html().replace('"', "");
-    // TODO: fix this failing when the dates are only one day (not a range)
     let dates: Vec<NaiveDate> = piece_html
         .select(&PIECE_DATES_SELECTOR)
         .map(|el| parse_date_element(el))
@@ -119,13 +134,13 @@ async fn scrape_piece(element: ElementRef<'_>) -> Piece {
 
     info!("Scraped {}", name);
 
-    Piece::new(
+    Ok(Piece::new(
         &name,
         piece_path,
         thumbnail_url,
         (*start_date, *end_date),
         location,
-    )
+    ))
 }
 
 fn scrape_piece_location(html: Html) -> PieceLocation {
