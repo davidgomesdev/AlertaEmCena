@@ -1,8 +1,13 @@
-pub mod scraper;
+use api::api::get_events;
+use tracing::info;
 
-use scraper::scrape_bol;
+mod api;
 
 #[tokio::main]
 async fn main() {
-  println!("{:?}", scrape_bol().await)
+    tracing_subscriber::fmt::init();
+
+    let events = get_events().await.unwrap();
+
+    events.iter().for_each(|event| info!("Got event {}", event.title));
 }
