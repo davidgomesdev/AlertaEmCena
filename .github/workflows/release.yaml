@@ -9,7 +9,7 @@ concurrency:
   group: ${{ github.workflow }}
 
 jobs:
-  build-server:
+  build-code:
     runs-on: ubuntu-latest
 
     strategy:
@@ -53,17 +53,17 @@ jobs:
     - name: 🔨 - Build
       run: >
         cross build --release --target ${{ matrix.target }} && \
-          mv target/**/release/alertaemcena server-${{ matrix.build }}
+          mv target/**/release/alertaemcena alertaemcena-${{ matrix.build }}
 
     - name: 📦 - Copy artifact
       uses: actions/upload-artifact@v4
       with:
-        name: server-${{ matrix.build }}
-        path: server-${{ matrix.build }}
+        name: alertaemcena-${{ matrix.build }}
+        path: alertaemcena-${{ matrix.build }}
         if-no-files-found: error
 
   release:
-    needs: [build-server]
+    needs: [build-code]
     runs-on: ubuntu-latest
     # Prevents any manual run from triggering a new GH release
     if: github.ref_name == 'main' && github.event_name == 'push'
@@ -71,7 +71,7 @@ jobs:
     steps:
     - uses: actions/checkout@v3
 
-    - name: 📦 - Copy server artifacts
+    - name: 📦 - Copy binary artifacts
       uses: actions/download-artifact@v4
       with:
         path: artifacts/
