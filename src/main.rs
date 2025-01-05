@@ -10,5 +10,10 @@ async fn main() {
 
     let events = get_events(10, &Category::Teatro).await.unwrap();
 
-    events.iter().for_each(|event| info!("Got event {:?}", event));
+    events.iter().for_each(|event| {
+        info!(
+            "Got for event {}: {}",
+            event.link, event.details.description
+        )
+    });
 }
