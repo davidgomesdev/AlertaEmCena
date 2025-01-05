@@ -8,14 +8,15 @@ pub struct Event {
     pub subtitle: String,
     pub description: String,
     pub link: String,
-    pub occurring_at: DateRange,
+    pub occurring_at: Schedule,
     pub venue: String,
 }
 
+/// Portuguese Schedule information
 #[derive(Debug)]
-pub struct DateRange {
-    pub start: Option<NaiveDate>,
-    pub end: Option<NaiveDate>,
+pub struct Schedule {
+    pub dates: String,
+    pub times: String
 }
 
 #[derive(strum::IntoStaticStr)]
