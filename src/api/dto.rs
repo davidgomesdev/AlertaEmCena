@@ -4,6 +4,7 @@ use scraper::{Html, Selector};
 use serde::Deserialize;
 use serde_either::SingleOrVec;
 use std::collections::BTreeMap;
+use voca_rs::strip::strip_tags;
 
 #[derive(Deserialize)]
 pub struct ResponseEvent {
@@ -74,7 +75,7 @@ impl ResponseEvent {
             })
             .to_string();
 
-        description
+        strip_tags(&description)
     }
 }
 
