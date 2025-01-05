@@ -1,18 +1,16 @@
-use super::model::{Event, Schedule};
+use super::model::{Event, EventDetails, Schedule};
 use serde::Deserialize;
 use serde_either::SingleOrVec;
 use std::collections::BTreeMap;
 
-const DATE_FORMAT: &str = "%Y-%m-%d";
-
 #[derive(Deserialize)]
-#[allow(dead_code)]
 pub struct ResponseEvent {
     #[serde(rename = "type")]
     pub event_type: String,
     pub title: ResponseTitle,
     pub subtitle: SingleOrVec<String>,
     pub description: Vec<String>,
+    pub featured_media_large: String,
     pub link: String,
     pub string_dates: String,
     pub string_times: String,
@@ -29,12 +27,15 @@ impl ResponseEvent {
         Event {
             event_type: self.event_type.clone(),
             title: self.title.rendered.clone(),
-            subtitle,
-            description: self.description.concat(),
+            details: EventDetails {
+                subtitle,
+                description: self.description.concat(),
+                image_url: self.featured_media_large.clone(),
+            },
             link: self.link.clone(),
             occurring_at: Schedule {
                 dates: self.string_dates.clone(),
-                times: self.string_times.clone()
+                times: self.string_times.clone(),
             },
             venue: self
                 .venue
