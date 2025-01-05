@@ -1,15 +1,19 @@
-use chrono::NaiveDate;
-
 #[allow(dead_code)]
 #[derive(Debug)]
 pub struct Event {
     pub event_type: String,
     pub title: String,
-    pub subtitle: String,
-    pub description: String,
+    pub details: EventDetails,
     pub link: String,
     pub occurring_at: Schedule,
     pub venue: String,
+}
+
+#[derive(Debug)]
+pub struct EventDetails {
+    pub subtitle: String,
+    pub description: String,
+    pub image_url: String,
 }
 
 /// Portuguese Schedule information

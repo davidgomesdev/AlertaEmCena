@@ -8,7 +8,7 @@ mod api;
 async fn main() {
     tracing_subscriber::fmt::init();
 
-    let events = get_events(10000, &Category::Teatro).await.unwrap();
+    let events = get_events(10, &Category::Teatro).await.unwrap();
 
-    events.iter().for_each(|event| info!("Got event {}", event.title));
+    events.iter().for_each(|event| info!("Got event {:?}", event));
 }
