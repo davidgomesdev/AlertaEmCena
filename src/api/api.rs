@@ -4,7 +4,7 @@ use tracing::error;
 
 const AGENDA_EVENTS_URL: &str = "https://www.agendalx.pt/wp-json/agendalx/v1/events";
 
-/*
+/**
    Returns events with ascending order
 */
 pub async fn get_events(amount_per_page: i32, category: &Category) -> Result<Vec<Event>, APIError> {

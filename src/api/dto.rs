@@ -1,5 +1,4 @@
-use super::model::{DateRange, Event};
-use chrono::NaiveDate;
+use super::model::{Event, Schedule};
 use serde::Deserialize;
 use serde_either::SingleOrVec;
 use std::collections::BTreeMap;
@@ -15,10 +14,8 @@ pub struct ResponseEvent {
     pub subtitle: SingleOrVec<String>,
     pub description: Vec<String>,
     pub link: String,
-    #[serde(rename = "StartDate")]
-    pub start_dates: String,
-    #[serde(rename = "LastDate")]
-    pub last_dates: String,
+    pub string_dates: String,
+    pub string_times: String,
     pub venue: BTreeMap<String, Venue>,
 }
 
@@ -35,9 +32,9 @@ impl ResponseEvent {
             subtitle,
             description: self.description.concat(),
             link: self.link.clone(),
-            occurring_at: DateRange {
-                start: Self::parse_date(&self.start_dates),
-                end: Self::parse_date(&self.last_dates),
+            occurring_at: Schedule {
+                dates: self.string_dates.clone(),
+                times: self.string_times.clone()
             },
             venue: self
                 .venue
@@ -45,12 +42,6 @@ impl ResponseEvent {
                 .map(|venue| venue.1.name.clone())
                 .unwrap_or_else(|| "".to_string()),
         }
-    }
-
-    fn parse_date(date: &str) -> Option<NaiveDate> {
-        NaiveDate::parse_from_str(date, &DATE_FORMAT)
-            .map(|res| Some(res))
-            .unwrap_or(None)
     }
 }
 
