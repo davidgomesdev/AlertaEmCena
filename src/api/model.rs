@@ -9,6 +9,7 @@ pub struct Event {
     pub venue: String,
 }
 
+#[allow(dead_code)]
 #[derive(Debug)]
 pub struct EventDetails {
     pub subtitle: String,
@@ -17,6 +18,7 @@ pub struct EventDetails {
 }
 
 /// Portuguese Schedule information
+#[allow(dead_code)]
 #[derive(Debug)]
 pub struct Schedule {
     pub dates: String,

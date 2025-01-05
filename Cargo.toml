@@ -16,3 +16,4 @@ serde_either = "0.2.1"
 strum = { version = "0.26.3", features = ["derive"] }
 chrono = "0.4.39"
 log = "0.4.22"
+futures = "0.3.31"
