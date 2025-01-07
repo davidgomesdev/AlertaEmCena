@@ -45,7 +45,7 @@ impl ResponseEvent {
                 .venue
                 .first_key_value()
                 .map(|venue| venue.1.name.to_string())
-                .unwrap_or_else(|| "".to_string()),
+                .unwrap_or_default(),
         }
     }
 

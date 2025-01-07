@@ -1,5 +1,5 @@
 use super::{dto::ResponseEvent, model::Event};
-use crate::api::model::Category;
+use crate::agenda_cultural::model::Category;
 use futures::future;
 
 const AGENDA_EVENTS_URL: &str = "https://www.agendalx.pt/wp-json/agendalx/v1/events";
