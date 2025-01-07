@@ -1,8 +1,6 @@
-use crate::agenda_cultural::model::Category;
-use agenda_cultural::api::get_events;
+use alertaemcena::agenda_cultural::api::get_events;
+use alertaemcena::agenda_cultural::model::Category;
 use tracing::info;
-
-mod agenda_cultural;
 
 #[tokio::main]
 async fn main() {
