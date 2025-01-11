@@ -1,28 +1,32 @@
 use alertaemcena::agenda_cultural::api::AgendaCulturalAPI;
 use alertaemcena::agenda_cultural::model::{Category, Event};
 use alertaemcena::discord::api::DiscordAPI;
-use futures::future::join_all;
-use lazy_static::lazy_static;
 use serenity::all::ChannelId;
 use std::env;
 use tracing::info;
-
-lazy_static! {
-    static ref channel_id: ChannelId = env::var("DISCORD_CHANNEL_ID")
-        .expect("DISCORD_CHANNEL_ID not set")
-        .parse()
-        .unwrap();
-}
 
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt::init();
 
-    let discord = DiscordAPI::default().await;
-    let events = AgendaCulturalAPI::get_events(10, &Category::Teatro)
-        .await
+    let teatro_channel_id: ChannelId = env::var("DISCORD_TEATRO_CHANNEL_ID")
+        .expect("DISCORD_TEATRO_CHANNEL_ID not set")
+        .parse()
         .unwrap();
-    let sent_events = discord.get_event_urls_sent(*channel_id).await;
+    let artes_channel_id: ChannelId = env::var("DISCORD_ARTES_CHANNEL_ID")
+        .expect("DISCORD_ARTES_CHANNEL_ID not set")
+        .parse()
+        .unwrap();
+
+    let discord = DiscordAPI::default().await;
+
+    send_new_events(&discord, &Category::Teatro, teatro_channel_id).await;
+    send_new_events(&discord, &Category::Artes, artes_channel_id).await;
+}
+
+async fn send_new_events(discord: &DiscordAPI, category: &Category, channel_id: ChannelId) {
+    let events = AgendaCulturalAPI::get_events(10, category).await.unwrap();
+    let sent_events = discord.get_event_urls_sent(channel_id).await;
 
     info!("Channel has {} sent events", events.len());
 
@@ -38,6 +42,6 @@ async fn main() {
 
     for event in unsent_events {
         info!("Sending unsent event: '{}' ({})", event.title, event.link);
-        discord.send_event(*channel_id, event).await;
+        discord.send_event(channel_id, event).await;
     }
 }
