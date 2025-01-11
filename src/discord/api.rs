@@ -8,6 +8,7 @@ use serenity::model::id::ChannelId;
 use serenity::prelude::SerenityError;
 use serenity::Client;
 use std::env;
+use tracing::{info, instrument};
 
 const AUTHOR_NAME: &str = "AlertaEmCena";
 
@@ -32,11 +33,14 @@ impl DiscordAPI {
         Self {
             client: Client::builder(token, intents)
                 .await
-                .expect("Error creating client"),
+                .expect("Error creating discord client"),
         }
     }
 
+    #[instrument(skip(self, channel_id), fields(channel_id = %channel_id.to_string(), event = %event.title.to_string()))]
     pub async fn send_event(&self, channel_id: ChannelId, event: Event) {
+        info!("Sending event");
+
         let message_builder = CreateMessage::new().add_embed(
             CreateEmbed::new()
                 .title(event.title.clone())
@@ -65,7 +69,7 @@ impl DiscordAPI {
         channel_id
             .messages_iter(&self.client.http)
             .map::<_, fn(_) -> Vec<Embed>>(|message: Result<Message, SerenityError>| {
-                message.unwrap().embeds
+                message.expect("Error getting message").embeds
             })
             .concat()
             .await
