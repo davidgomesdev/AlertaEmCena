@@ -1,12 +1,23 @@
 #[allow(dead_code)]
 #[derive(Debug)]
 pub struct Event {
-    pub event_type: String,
     pub title: String,
     pub details: EventDetails,
     pub link: String,
     pub occurring_at: Schedule,
     pub venue: String,
+}
+
+impl Event {
+    pub fn new(title: String, details: EventDetails, link: String, occurring_at: Schedule, venue: String) -> Self {
+        Self {
+            title,
+            details,
+            link,
+            occurring_at,
+            venue
+        }
+    }
 }
 
 #[allow(dead_code)]
@@ -17,12 +28,31 @@ pub struct EventDetails {
     pub image_url: String,
 }
 
+impl EventDetails {
+    pub fn new(subtitle: String, description: String, image_url: String) -> Self {
+        Self {
+            subtitle,
+            description,
+            image_url
+        }
+    }
+}
+
 /// Portuguese Schedule information
 #[allow(dead_code)]
 #[derive(Debug)]
 pub struct Schedule {
     pub dates: String,
     pub times: String
+}
+
+impl Schedule {
+    pub fn new(dates: String, times: String) -> Self {
+        Self {
+            dates,
+            times
+        }
+    }
 }
 
 #[derive(strum::IntoStaticStr)]
