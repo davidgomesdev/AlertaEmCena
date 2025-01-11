@@ -7,7 +7,7 @@ use serde_either::SingleOrVec;
 use std::collections::BTreeMap;
 use voca_rs::strip::strip_tags;
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 pub struct ResponseEvent {
     pub title: ResponseTitle,
     pub subtitle: SingleOrVec<String>,
@@ -20,6 +20,7 @@ pub struct ResponseEvent {
 }
 
 impl ResponseEvent {
+    #[tracing::instrument(skip(self), fields(self.link = %self.link))]
     pub async fn to_model(&self) -> Event {
         let subtitle = match self.subtitle.clone() {
             SingleOrVec::Single(subtitle) => subtitle,
@@ -33,24 +34,29 @@ impl ResponseEvent {
             self.link.to_string(),
             Schedule::new(self.string_dates.to_string(), self.string_times.to_string()),
             self.venue
-                .first_key_value()
+                .iter()
+                .filter(|(_, venue)| !venue.name.is_empty())
+                .next()
                 .map(|venue| venue.1.name.to_string())
-                .unwrap_or_default(),
+                .unwrap_or_else(|| {
+                    warn!("No venue name found (omitting venue)");
+                    "".to_string()
+                }),
         )
     }
 
     async fn crawl_full_description(&self) -> String {
         let full_page: Result<String, _> = reqwest::get(&self.link)
-            .inspect_err(|err| warn!("Failed to get full page {}: {}", self.link, err))
+            .inspect_err(|err| warn!("Failed to get full page: {}", err))
             .and_then(|res| {
                 res.text()
-                    .inspect_err(|err| warn!("Failed to get full page text {}: {}", self.link, err))
+                    .inspect_err(|err| warn!("Failed to get full page text: {}", err))
             })
             .await;
 
         if full_page.is_err() {
             warn!("Using only preview description");
-            return self.description.concat().to_string()
+            return self.description.concat().to_string();
         }
 
         let page_html = Html::parse_fragment(full_page.unwrap().as_str());
@@ -67,8 +73,8 @@ impl ResponseEvent {
             .first()
             .unwrap_or_else(|| {
                 warn!(
-                    "Not able to find description in page {} (Half description is {})",
-                    self.link, half_description
+                    "Not able to find description in page (using preview description: {})",
+                    preview_description
                 );
                 &preview_description
             })
@@ -78,7 +84,7 @@ impl ResponseEvent {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 pub struct ResponseTitle {
     pub rendered: String,
 }

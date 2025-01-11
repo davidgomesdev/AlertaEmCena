@@ -24,7 +24,7 @@ pub struct AgendaCulturalAPI;
 
 impl AgendaCulturalAPI {
     /**
-       Returns events with ascending order
+    Returns events with ascending order
     */
     pub async fn get_events(
         amount_per_page: i32,
@@ -51,7 +51,9 @@ impl AgendaCulturalAPI {
 
         match parsed_response {
             Ok(mut parsed_response) => {
-                Ok(future::join_all(parsed_response.iter_mut().rev().map(|e| e.to_model())).await)
+                Ok(future::join_all(parsed_response.iter_mut().rev().map(|e| {
+                    e.to_model()
+                })).await)
             }
             Err(_) => Err(APIError::InvalidResponse),
         }
