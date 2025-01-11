@@ -1,4 +1,5 @@
 use super::model::{Event, EventDetails, Schedule};
+use futures::TryFutureExt;
 use log::warn;
 use scraper::{Html, Selector};
 use serde::Deserialize;
@@ -39,14 +40,20 @@ impl ResponseEvent {
     }
 
     async fn crawl_full_description(&self) -> String {
-        let full_page = reqwest::get(&self.link)
-            .await
-            .unwrap()
-            .text()
-            .await
-            .unwrap();
+        let full_page: Result<String, _> = reqwest::get(&self.link)
+            .inspect_err(|err| warn!("Failed to get full page {}: {}", self.link, err))
+            .and_then(|res| {
+                res.text()
+                    .inspect_err(|err| warn!("Failed to get full page text {}: {}", self.link, err))
+            })
+            .await;
 
-        let page_html = Html::parse_fragment(full_page.as_str());
+        if full_page.is_err() {
+            warn!("Using only preview description");
+            return self.description.concat().to_string()
+        }
+
+        let page_html = Html::parse_fragment(full_page.unwrap().as_str());
         let preview_description = self.description.concat();
         let half_description = preview_description
             .split_at(preview_description.len() / 2)

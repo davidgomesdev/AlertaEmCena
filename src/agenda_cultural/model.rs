@@ -55,7 +55,7 @@ impl Schedule {
     }
 }
 
-#[derive(strum::IntoStaticStr)]
+#[derive(strum::IntoStaticStr, Debug)]
 pub enum Category {
     Teatro,
     Artes
