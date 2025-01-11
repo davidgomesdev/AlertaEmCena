@@ -36,9 +36,8 @@ async fn main() {
         return;
     }
 
-    join_all(unsent_events.into_iter().map(|event| async {
+    for event in unsent_events {
         info!("Sending unsent event: '{}' ({})", event.title, event.link);
         discord.send_event(*channel_id, event).await;
-    }))
-    .await;
+    }
 }
