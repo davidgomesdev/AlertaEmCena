@@ -2,7 +2,7 @@ use alertaemcena::agenda_cultural::api::AgendaCulturalAPI;
 use alertaemcena::agenda_cultural::model::Category;
 
 #[tokio::test]
-async fn test_teatro_scrape() {
+async fn should_scrape_teatro_events() {
   let res = AgendaCulturalAPI::get_events(5, &Category::Teatro)
       .await
       .unwrap();
@@ -11,7 +11,7 @@ async fn test_teatro_scrape() {
 }
 
 #[tokio::test]
-async fn test_artes_scrape() {
+async fn should_scrape_artes_events() {
   let res = AgendaCulturalAPI::get_events(2, &Category::Artes)
       .await
       .unwrap();
