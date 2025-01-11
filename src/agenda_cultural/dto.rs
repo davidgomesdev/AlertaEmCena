@@ -36,8 +36,7 @@ impl ResponseEvent {
             Schedule::new(self.string_dates.to_string(), self.string_times.to_string()),
             self.venue
                 .iter()
-                .filter(|(_, venue)| !venue.name.is_empty())
-                .next()
+                .find(|(_, venue)| !venue.name.is_empty())
                 .map(|venue| venue.1.name.to_string())
                 .unwrap_or_else(|| {
                     warn!("No venue name found (omitting venue)");

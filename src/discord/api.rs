@@ -74,8 +74,7 @@ impl DiscordAPI {
             .concat()
             .await
             .iter()
-            .map(|embed| embed.url.clone())
-            .flatten()
+            .filter_map(|embed| embed.url.clone())
             .collect()
     }
 }
