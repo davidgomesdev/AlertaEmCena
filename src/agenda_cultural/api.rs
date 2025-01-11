@@ -6,7 +6,7 @@ use reqwest::Client;
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
 use reqwest_retry::policies::ExponentialBackoff;
 use reqwest_retry::RetryTransientMiddleware;
-use tracing::info;
+use tracing::debug;
 
 const AGENDA_EVENTS_URL: &str = "https://www.agendalx.pt/wp-json/agendalx/v1/events";
 const EVENT_TYPE: &str = "event";
@@ -30,7 +30,7 @@ impl AgendaCulturalAPI {
         amount_per_page: i32,
         category: &Category,
     ) -> Result<Vec<Event>, APIError> {
-        info!("Getting {} '{:?}' events", amount_per_page, *category);
+        debug!("Getting {} events", amount_per_page);
 
         let category: &'static str = category.into();
         let json_response = REST_CLIENT
@@ -43,10 +43,12 @@ impl AgendaCulturalAPI {
             ))
             .send()
             .await
-            .unwrap()
+            .expect("Error sending request")
+            .error_for_status()
+            .expect("Request failed")
             .text()
             .await
-            .unwrap();
+            .expect("Received invalid response");
         let parsed_response = serde_json::from_str::<Vec<ResponseEvent>>(&json_response);
 
         match parsed_response {

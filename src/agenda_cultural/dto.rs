@@ -5,6 +5,7 @@ use scraper::{Html, Selector};
 use serde::Deserialize;
 use serde_either::SingleOrVec;
 use std::collections::BTreeMap;
+use reqwest::Response;
 use voca_rs::strip::strip_tags;
 
 #[derive(Debug, Deserialize)]
@@ -48,7 +49,7 @@ impl ResponseEvent {
     async fn crawl_full_description(&self) -> String {
         let full_page: Result<String, _> = reqwest::get(&self.link)
             .inspect_err(|err| warn!("Failed to get full page: {}", err))
-            .and_then(|res| {
+            .and_then(|res: Response| {
                 res.text()
                     .inspect_err(|err| warn!("Failed to get full page text: {}", err))
             })
@@ -62,8 +63,9 @@ impl ResponseEvent {
         let page_html = Html::parse_fragment(full_page.unwrap().as_str());
         let preview_description = self.description.concat();
         let half_description = preview_description
-            .split_at(preview_description.len() / 2)
-            .0;
+            .split_at_checked(preview_description.len() / 2)
+            .map(|(half, _)| half)
+            .unwrap_or(&preview_description);
 
         let description = page_html
             .select(&Selector::parse("p").unwrap())
