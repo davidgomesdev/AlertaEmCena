@@ -59,7 +59,10 @@ impl ResponseEvent {
             .collect::<Vec<String>>()
             .first()
             .unwrap_or_else(|| {
-                warn!("Not able to find description in page {}", self.link);
+                warn!(
+                    "Not able to find description in page {} (Half description is {})",
+                    self.link, half_description
+                );
                 &preview_description
             })
             .to_string();
