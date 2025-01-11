@@ -8,8 +8,6 @@ use voca_rs::strip::strip_tags;
 
 #[derive(Deserialize)]
 pub struct ResponseEvent {
-    #[serde(rename = "type")]
-    pub event_type: String,
     pub title: ResponseTitle,
     pub subtitle: SingleOrVec<String>,
     pub description: Vec<String>,
@@ -28,25 +26,16 @@ impl ResponseEvent {
         };
         let description = self.crawl_full_description().await;
 
-        Event {
-            event_type: self.event_type.to_string(),
-            title: self.title.rendered.to_string(),
-            details: EventDetails {
-                subtitle,
-                description,
-                image_url: self.featured_media_large.to_string(),
-            },
-            link: self.link.to_string(),
-            occurring_at: Schedule {
-                dates: self.string_dates.to_string(),
-                times: self.string_times.to_string(),
-            },
-            venue: self
-                .venue
+        Event::new(
+            self.title.rendered.to_string(),
+            EventDetails::new(subtitle, description, self.featured_media_large.to_string()),
+            self.link.to_string(),
+            Schedule::new(self.string_dates.to_string(), self.string_times.to_string()),
+            self.venue
                 .first_key_value()
                 .map(|venue| venue.1.name.to_string())
                 .unwrap_or_default(),
-        }
+        )
     }
 
     async fn crawl_full_description(&self) -> String {

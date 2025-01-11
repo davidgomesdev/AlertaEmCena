@@ -1,4 +1,4 @@
-use alertaemcena::agenda_cultural::api::get_events;
+use alertaemcena::agenda_cultural::api::{AgendaCulturalAPI};
 use alertaemcena::agenda_cultural::model::Category;
 use tracing::info;
 
@@ -6,7 +6,7 @@ use tracing::info;
 async fn main() {
     tracing_subscriber::fmt::init();
 
-    let events = get_events(10, &Category::Teatro).await.unwrap();
+    let events = AgendaCulturalAPI::get_events(10, &Category::Teatro).await.unwrap();
 
     events.iter().for_each(|event| {
         info!(
