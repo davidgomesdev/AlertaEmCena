@@ -1,5 +1,4 @@
 use crate::agenda_cultural::model::Event;
-use futures::StreamExt;
 use lazy_static::lazy_static;
 use regex::Regex;
 use serenity::all::{Colour, CreateEmbedAuthor, GatewayIntents};
