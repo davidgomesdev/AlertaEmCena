@@ -7,6 +7,7 @@ use serenity::builder::{CreateEmbed, CreateMessage};
 use serenity::model::id::ChannelId;
 use serenity::prelude::SerenityError;
 use serenity::Client;
+use std::env;
 
 const AUTHOR_NAME: &str = "AlertaEmCena";
 
@@ -19,6 +20,10 @@ pub struct DiscordAPI {
 }
 
 impl DiscordAPI {
+    pub async fn default() -> Self {
+        DiscordAPI::new(&env::var("DISCORD_TOKEN").expect("DISCORD_TOKEN not set")).await
+    }
+
     pub async fn new(token: &str) -> Self {
         let intents = GatewayIntents::GUILD_MESSAGES
             | GatewayIntents::MESSAGE_CONTENT
