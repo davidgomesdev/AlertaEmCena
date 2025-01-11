@@ -27,15 +27,13 @@ jobs:
     runs-on: ubuntu-latest
     needs: detect-changes
     if: ${{ needs.detect-changes.outputs.code == 'true' }}
-    
     env:
       CARGO_TERM_COLOR: always
-
+    environment: cicd
     defaults:
       run:
         shell: bash
         working-directory: .
-
     steps:
     - uses: rui314/setup-mold@v1
 
