@@ -1,9 +1,11 @@
 use crate::agenda_cultural::model::Event;
+use futures::StreamExt;
 use lazy_static::lazy_static;
 use regex::Regex;
-use serenity::all::{Colour, CreateEmbedAuthor, GatewayIntents};
+use serenity::all::{Colour, CreateEmbedAuthor, Embed, GatewayIntents, Message};
 use serenity::builder::{CreateEmbed, CreateMessage};
 use serenity::model::id::ChannelId;
+use serenity::prelude::SerenityError;
 use serenity::Client;
 
 const AUTHOR_NAME: &str = "AlertaEmCena";
@@ -52,5 +54,19 @@ impl DiscordAPI {
             .send_message(&self.client.http, message_builder)
             .await
             .expect("Failed to send message");
+    }
+
+    pub async fn get_event_urls_sent(&self, channel_id: ChannelId) -> Vec<String> {
+        channel_id
+            .messages_iter(&self.client.http)
+            .map::<_, fn(_) -> Vec<Embed>>(|message: Result<Message, SerenityError>| {
+                message.unwrap().embeds
+            })
+            .concat()
+            .await
+            .iter()
+            .map(|embed| embed.url.clone())
+            .flatten()
+            .collect()
     }
 }

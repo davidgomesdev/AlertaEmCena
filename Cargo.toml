@@ -21,3 +21,4 @@ reqwest-retry = "0.7.0"
 reqwest-middleware = "0.4.0"
 serenity = "0.12.4"
 regex = "1.11.1"
+uuid = { version = "1.11.1", features = ["v4"] }
