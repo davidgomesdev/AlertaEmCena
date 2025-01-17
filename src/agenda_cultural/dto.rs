@@ -1,6 +1,6 @@
 use super::model::{Event, EventDetails, Schedule};
 use futures::TryFutureExt;
-use log::warn;
+use tracing::warn;
 use scraper::{Html, Selector};
 use serde::Deserialize;
 use serde_either::SingleOrVec;
