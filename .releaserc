@@ -6,8 +6,7 @@
       "@semantic-release/github",
       {
         "assets": [
-          { "path": "artifacts/server-*" },
-          { "path": "artifacts/app.apk" }
+          { "path": "artifacts/alertaemcena-*" }
         ]
       }
     ]
