@@ -1,14 +1,15 @@
 use crate::agenda_cultural::model::Event;
-use futures::StreamExt;
+use futures::future::{join_all, try_join_all};
+use futures::{StreamExt, TryFutureExt, TryStreamExt};
 use lazy_static::lazy_static;
 use regex::Regex;
 use serenity::all::{Colour, CreateEmbedAuthor, Embed, GatewayIntents, Message};
 use serenity::builder::{CreateEmbed, CreateMessage};
 use serenity::model::id::ChannelId;
 use serenity::prelude::SerenityError;
-use serenity::Client;
+use serenity::{Client, Error};
 use std::env;
-use tracing::{info, instrument};
+use tracing::{debug, error, info, instrument};
 
 const AUTHOR_NAME: &str = "AlertaEmCena";
 
@@ -76,5 +77,22 @@ impl DiscordAPI {
             .iter()
             .filter_map(|embed| embed.url.clone())
             .collect()
+    }
+
+    #[instrument(skip(self, channel_id), fields(channel_id = %channel_id.to_string()))]
+    pub async fn delete_all_messages(&self, channel_id: ChannelId) {
+        let messages = channel_id
+            .messages_iter(&self.client.http)
+            .try_collect::<Vec<Message>>()
+            .await
+            .expect("Failed to fetch messages");
+
+        for chunk in messages.chunks(100) {
+            debug!("Deleting {} messages", chunk.len());
+            channel_id
+                .delete_messages(&self.client.http, chunk)
+                .await
+                .expect("Failed to delete messages");
+        }
     }
 }
