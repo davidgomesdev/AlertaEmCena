@@ -1,15 +1,14 @@
 use crate::agenda_cultural::model::Event;
-use futures::future::{join_all, try_join_all};
-use futures::{StreamExt, TryFutureExt, TryStreamExt};
+use futures::{StreamExt, TryStreamExt};
 use lazy_static::lazy_static;
 use regex::Regex;
 use serenity::all::{Colour, CreateEmbedAuthor, Embed, GatewayIntents, Message};
 use serenity::builder::{CreateEmbed, CreateMessage};
 use serenity::model::id::ChannelId;
 use serenity::prelude::SerenityError;
-use serenity::{Client, Error};
+use serenity::Client;
 use std::env;
-use tracing::{debug, error, info, instrument};
+use tracing::{debug, info, instrument};
 
 const AUTHOR_NAME: &str = "AlertaEmCena";
 

@@ -3,7 +3,6 @@ use alertaemcena::agenda_cultural::model::{Category, Event};
 use alertaemcena::config::env_loader::load_config;
 use alertaemcena::discord::api::DiscordAPI;
 use serenity::all::ChannelId;
-use std::env;
 use tracing::{info, instrument};
 
 #[tokio::main]
@@ -13,6 +12,11 @@ async fn main() {
     let config = load_config();
 
     let discord = DiscordAPI::default().await;
+
+    if config.debug_config.clear_channel {
+        discord.delete_all_messages(config.teatro_channel_id).await;
+        discord.delete_all_messages(config.artes_channel_id).await;
+    }
 
     send_new_events(&discord, &Category::Teatro, config.teatro_channel_id).await;
     send_new_events(&discord, &Category::Artes, config.artes_channel_id).await;
