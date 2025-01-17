@@ -7,5 +7,5 @@ pub struct Config {
 }
 
 pub struct DebugConfig {
-    pub delete_all_messages: bool,
+    pub clear_channel: bool,
 }
