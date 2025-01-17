@@ -1,5 +1,6 @@
 use alertaemcena::agenda_cultural::api::AgendaCulturalAPI;
 use alertaemcena::agenda_cultural::model::{Category, Event};
+use alertaemcena::config::env_loader::load_config;
 use alertaemcena::discord::api::DiscordAPI;
 use serenity::all::ChannelId;
 use std::env;
@@ -9,19 +10,12 @@ use tracing::{info, instrument};
 async fn main() {
     tracing_subscriber::fmt::init();
 
-    let teatro_channel_id: ChannelId = env::var("DISCORD_TEATRO_CHANNEL_ID")
-        .expect("DISCORD_TEATRO_CHANNEL_ID not set")
-        .parse()
-        .expect("DISCORD_TEATRO_CHANNEL_ID is not a valid channel ID");
-    let artes_channel_id: ChannelId = env::var("DISCORD_ARTES_CHANNEL_ID")
-        .expect("DISCORD_ARTES_CHANNEL_ID not set")
-        .parse()
-        .expect("DISCORD_ARTES_CHANNEL_ID is not a valid channel ID");
+    let config = load_config();
 
     let discord = DiscordAPI::default().await;
 
-    send_new_events(&discord, &Category::Teatro, teatro_channel_id).await;
-    send_new_events(&discord, &Category::Artes, artes_channel_id).await;
+    send_new_events(&discord, &Category::Teatro, config.teatro_channel_id).await;
+    send_new_events(&discord, &Category::Artes, config.artes_channel_id).await;
 }
 
 #[instrument(skip(discord, channel_id), fields(channel_id = %channel_id.to_string()))]
