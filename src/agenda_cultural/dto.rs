@@ -47,7 +47,7 @@ impl ResponseEvent {
 
     async fn crawl_full_description(&self) -> String {
         let full_page: Result<String, _> = reqwest::get(&self.link)
-            .inspect_err(|err| warn!("Failed to get full page: {}", err))
+            .inspect_err(|err| warn!("Failed to get full page: {:?}", err))
             .and_then(|res: Response| {
                 res.text()
                     .inspect_err(|err| warn!("Failed to get full page text: {}", err))
@@ -56,7 +56,7 @@ impl ResponseEvent {
 
         if full_page.is_err() {
             warn!("Using only preview description");
-            return self.description.concat().to_string();
+            return strip_tags(&self.description.concat());
         }
 
         let page_html = Html::parse_fragment(full_page.unwrap().as_str());
