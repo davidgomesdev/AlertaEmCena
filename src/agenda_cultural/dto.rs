@@ -1,11 +1,12 @@
 use super::model::{Event, EventDetails, Schedule};
 use futures::TryFutureExt;
-use tracing::warn;
-use scraper::{Html, Selector};
-use serde::Deserialize;
-use serde_either::SingleOrVec;
-use std::collections::BTreeMap;
 use reqwest::Response;
+use scraper::{Html, Selector};
+use serde::{de, Deserialize, Deserializer};
+use serde_either::SingleOrVec;
+use serde_json::Value;
+use std::collections::BTreeMap;
+use tracing::warn;
 use voca_rs::strip::strip_tags;
 
 #[derive(Debug, Deserialize)]
@@ -13,10 +14,13 @@ pub struct ResponseEvent {
     pub title: ResponseTitle,
     pub subtitle: SingleOrVec<String>,
     pub description: Vec<String>,
+    #[serde(deserialize_with = "deserialize_str")]
     pub featured_media_large: String,
+    #[serde(deserialize_with = "deserialize_str")]
     pub link: String,
     pub string_dates: String,
     pub string_times: String,
+    #[serde(deserialize_with = "deserialize_btreemap")]
     pub venue: BTreeMap<String, Venue>,
 }
 
@@ -92,5 +96,23 @@ pub struct ResponseTitle {
 
 #[derive(Debug, Deserialize)]
 pub struct Venue {
+    #[serde(deserialize_with = "deserialize_str")]
     pub name: String,
+}
+
+fn deserialize_btreemap<'de, D>(d: D) -> Result<BTreeMap<String, Venue>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    Ok(BTreeMap::deserialize(d).unwrap_or(BTreeMap::new()))
+}
+
+fn deserialize_str<'de, D>(d: D) -> Result<String, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    Ok(match Value::deserialize(d)? {
+        Value::String(s) => s.parse().map_err(de::Error::custom)?,
+        _ => String::new(),
+    })
 }

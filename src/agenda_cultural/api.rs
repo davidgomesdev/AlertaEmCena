@@ -1,4 +1,3 @@
-use std::future::Future;
 use super::{dto::ResponseEvent, model::Event};
 use crate::agenda_cultural::model::Category;
 use futures::future;
@@ -7,7 +6,7 @@ use reqwest::Client;
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
 use reqwest_retry::policies::ExponentialBackoff;
 use reqwest_retry::RetryTransientMiddleware;
-use tracing::{debug, info};
+use tracing::{error, info};
 
 const AGENDA_EVENTS_URL: &str = "https://www.agendalx.pt/wp-json/agendalx/v1/events";
 const EVENT_TYPE: &str = "event";
@@ -34,8 +33,12 @@ impl AgendaCulturalAPI {
         amount_per_page: Option<i32>,
     ) -> Result<Vec<Event>, APIError> {
         match amount_per_page {
-            None => { info!("Getting all events"); }
-            Some(amount) => { info!("Getting {} events", amount); }
+            None => {
+                info!("Getting all events");
+            }
+            Some(amount) => {
+                info!("Getting {} events", amount);
+            }
         }
 
         let category: &'static str = category.into();
@@ -60,11 +63,12 @@ impl AgendaCulturalAPI {
 
         match parsed_response {
             Ok(mut parsed_response) => {
-                Ok(future::join_all(parsed_response.iter_mut().rev().map(|e| {
-                    e.to_model()
-                })).await)
+                Ok(future::join_all(parsed_response.iter_mut().rev().map(|e| e.to_model())).await)
             }
-            Err(_) => Err(APIError::InvalidResponse),
+            Err(e) => {
+                error!("Response parse failed: {:?}", e);
+                Err(APIError::InvalidResponse)
+            }
         }
     }
 }
