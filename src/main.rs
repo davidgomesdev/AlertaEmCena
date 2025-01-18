@@ -24,7 +24,7 @@ async fn main() {
 
 #[instrument(skip(discord, channel_id), fields(channel_id = %channel_id.to_string()))]
 async fn send_new_events(discord: &DiscordAPI, category: &Category, channel_id: ChannelId) {
-    let events = AgendaCulturalAPI::get_events(12, category).await.unwrap();
+    let events = AgendaCulturalAPI::get_events(category, None).await.unwrap();
     let sent_events = discord.get_event_urls_sent(channel_id).await;
 
     info!("Channel has {} sent events", events.len());
