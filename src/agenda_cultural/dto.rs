@@ -5,7 +5,9 @@ use scraper::{Html, Selector};
 use serde::{de, Deserialize, Deserializer};
 use serde_either::SingleOrVec;
 use serde_json::Value;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
+use lazy_static::lazy_static;
+use regex::Regex;
 use tracing::warn;
 use voca_rs::strip::strip_tags;
 
@@ -24,6 +26,10 @@ pub struct ResponseEvent {
     pub venue: BTreeMap<String, Venue>,
 }
 
+lazy_static! {
+    static ref REMOVE_YEAR: Regex = Regex::new(r" *?(\d{4}) *?").unwrap();
+}
+
 impl ResponseEvent {
     #[tracing::instrument(skip(self), fields(self.link = %self.link))]
     pub async fn to_model(&self) -> Event {
@@ -37,7 +43,7 @@ impl ResponseEvent {
             self.title.rendered.to_string(),
             EventDetails::new(subtitle, description, self.featured_media_large.to_string()),
             self.link.to_string(),
-            Schedule::new(self.string_dates.to_string(), self.string_times.to_string()),
+            Schedule::new(Self::get_date_description(&self.string_dates), self.string_times.to_string()),
             self.venue
                 .iter()
                 .find(|(_, venue)| !venue.name.is_empty())
@@ -47,6 +53,30 @@ impl ResponseEvent {
                     "".to_string()
                 }),
         )
+    }
+
+    fn get_date_description(schedule_dates: &str) -> String {
+        let years = REMOVE_YEAR
+            .captures_iter(schedule_dates)
+            .map(|a| a[1].to_string())
+            .collect::<Vec<String>>();
+
+        let year_count = years.len();
+        if year_count >= 2 {
+            let unique_years = years.iter().collect::<HashSet<&String>>();
+
+            if unique_years.len() == 1 {
+                Self::remove_year_from_description(schedule_dates)
+            } else {
+                schedule_dates.to_string()
+            }
+        } else {
+            Self::remove_year_from_description(schedule_dates)
+        }
+    }
+
+    fn remove_year_from_description(date: &str) -> String {
+        REMOVE_YEAR.replace_all(date, "").to_string()
     }
 
     async fn crawl_full_description(&self) -> String {
@@ -115,4 +145,37 @@ where
         Value::String(s) => s.parse().map_err(de::Error::custom)?,
         _ => String::new(),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn when_a_date_spans_only_one_year_should_get_only_day_and_month() {
+        let result = ResponseEvent::get_date_description("28 janeiro a 18 novembro 2025");
+
+        assert_eq!(result, "28 janeiro a 18 novembro");
+    }
+
+    #[test_log::test]
+    fn when_a_date_spans_two_equal_years_should_get_both_day_month_and_year() {
+        let result = ResponseEvent::get_date_description("2 março 2025 a 1 setembro 2025");
+
+        assert_eq!(result, "2 março a 1 setembro");
+    }
+
+    #[test_log::test]
+    fn when_a_date_spans_two_different_years_should_get_both_day_month_and_year() {
+        let result = ResponseEvent::get_date_description("2 novembro 2024 a 1 junho 2025");
+
+        assert_eq!(result, "2 novembro 2024 a 1 junho 2025");
+    }
+
+    #[test]
+    fn when_a_date_has_only_one_day_should_get_day_and_month() {
+        let result = ResponseEvent::get_date_description("3 maio 2025");
+
+        assert_eq!(result, "3 maio");
+    }
 }
