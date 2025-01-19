@@ -1,7 +1,5 @@
 use crate::agenda_cultural::model::Event;
 use futures::{StreamExt, TryStreamExt};
-use lazy_static::lazy_static;
-use regex::Regex;
 use serenity::all::{Colour, CreateEmbedAuthor, Embed, GatewayIntents, Message};
 use serenity::builder::{CreateEmbed, CreateMessage};
 use serenity::model::id::ChannelId;
@@ -11,10 +9,6 @@ use std::env;
 use tracing::{debug, info, instrument};
 
 const AUTHOR_NAME: &str = "AlertaEmCena";
-
-lazy_static! {
-    static ref REMOVE_YEAR: Regex = Regex::new(r"\b\d{4}\b").unwrap();
-}
 
 pub struct DiscordAPI {
     client: Client,
@@ -48,13 +42,7 @@ impl DiscordAPI {
                 .description(event.details.description.clone())
                 .author(CreateEmbedAuthor::new(AUTHOR_NAME))
                 .color(Colour::new(0x005eeb))
-                .field(
-                    "Datas",
-                    REMOVE_YEAR
-                        .replace_all(&event.occurring_at.dates, "")
-                        .to_string(),
-                    true,
-                )
+                .field("Datas", event.occurring_at.dates, true)
                 .field("Onde", event.venue.clone(), true)
                 .image(event.details.image_url.clone()),
         );
