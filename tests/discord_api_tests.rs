@@ -13,8 +13,7 @@ lazy_static! {
         .expect("DISCORD_CHANNEL_ID is in a wrong format");
 }
 
-#[tokio::test]
-#[test_log::test]
+#[test_log::test(tokio::test)]
 async fn should_send_event() {
     build_api()
         .await
@@ -35,14 +34,12 @@ async fn should_send_event() {
         .await;
 }
 
-#[tokio::test]
-#[test_log::test]
+#[test_log::test(tokio::test)]
 async fn should_read_events() {
     build_api().await.get_event_urls_sent(*channel_id).await;
 }
 
-#[tokio::test]
-#[test_log::test]
+#[test_log::test(tokio::test)]
 async fn should_read_event_sent() {
     let test_id = Uuid::new_v4();
     let link = format!(
@@ -76,8 +73,7 @@ async fn should_read_event_sent() {
     assert!(is_event_sent);
 }
 
-#[tokio::test]
-#[test_log::test]
+#[test_log::test(tokio::test)]
 async fn when_an_event_is_deleted_should_not_read_afterwards() {
     let test_id = Uuid::new_v4();
     let link = format!(
