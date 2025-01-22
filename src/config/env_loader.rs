@@ -7,10 +7,12 @@ pub fn load_config() -> Config {
     let artes_channel_id: ChannelId = load_channel_id_config("DISCORD_ARTES_CHANNEL_ID");
 
     let debug_clear_channel = load_bool_config("DEBUG_CLEAR_CHANNEL", false);
+    let debug_event_limit = load_i32_config("DEBUG_EVENT_LIMIT");
 
     Config {
         debug_config: DebugConfig {
-            clear_channel: debug_clear_channel,
+            clear_channel: debug_clear_channel,Z
+            event_limit: debug_event_limit,
         },
         teatro_channel_id,
         artes_channel_id,
@@ -28,6 +30,21 @@ fn load_bool_config(name: &str, default: bool) -> bool {
     env::var(name)
         .unwrap_or_else(|_| default.to_string())
         .parse()
-        .unwrap_or_else(|_| panic!("Invalid config '{}'. Expected either 'true' or 'false'",
-                name))
+        .unwrap_or_else(|_| {
+            panic!(
+                "Invalid config '{}'. Expected either 'true' or 'false'",
+                name
+            )
+        })
+}
+
+fn load_i32_config(name: &str) -> Option<i32> {
+    match env::var(name) {
+        Ok(value) => {
+            Some(value.parse().unwrap_or_else(|_| {
+                panic!("Invalid config '{}'. Expected an integer number.", name)
+            }))
+        }
+        Err(_) => None,
+    }
 }

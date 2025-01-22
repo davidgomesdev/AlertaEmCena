@@ -6,16 +6,18 @@ pub struct Event {
     pub link: String,
     pub occurring_at: Schedule,
     pub venue: String,
+    pub tags: Vec<String>,
 }
 
 impl Event {
-    pub fn new(title: String, details: EventDetails, link: String, occurring_at: Schedule, venue: String) -> Self {
+    pub fn new(title: String, details: EventDetails, link: String, occurring_at: Schedule, venue: String, tags: Vec<String>) -> Self {
         Self {
             title,
             details,
             link,
             occurring_at,
-            venue
+            venue,
+            tags
         }
     }
 }
