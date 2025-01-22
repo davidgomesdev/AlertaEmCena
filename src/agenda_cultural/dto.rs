@@ -100,26 +100,20 @@ impl ResponseEvent {
         }
 
         let page_html = Html::parse_fragment(full_page.unwrap().as_str());
-        let preview_description = self.description.concat();
-        let half_description = preview_description
-            .split_at_checked(preview_description.len() / 2)
-            .map(|(half, _)| half)
-            .unwrap_or(&preview_description);
-
         let description = page_html
-            .select(&Selector::parse("p").unwrap())
-            .filter(|p| p.inner_html().starts_with(half_description))
+            .select(&Selector::parse(".entry-container > p").unwrap())
             .map(|p| p.inner_html().to_string())
             .collect::<Vec<String>>()
             .first()
+            .map(|v| v.to_owned())
             .unwrap_or_else(|| {
+                let preview_description = self.description.concat();
                 warn!(
                     "Not able to find description in page (using preview description: {})",
                     preview_description
                 );
-                &preview_description
-            })
-            .to_string();
+                preview_description
+            });
 
         strip_tags(&description)
     }

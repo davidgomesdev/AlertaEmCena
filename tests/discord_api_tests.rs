@@ -30,6 +30,7 @@ async fn should_send_event() {
                 times: "qui: 21h; sex: 21h; sáb: 21h; dom: 17h".to_string(),
             },
             venue: "Teatro Nacional D. Maria II, Lisboa".to_string(),
+            tags: vec!["festival".to_string()],
         })
         .await;
 }
@@ -62,6 +63,7 @@ async fn should_read_event_sent() {
             times: "qui: 21h; sex: 21h; sáb: 21h; dom: 17h".to_string(),
         },
         venue: "Teatro Nacional D. Maria II, Lisboa".to_string(),
+        tags: vec!["festival".to_string()],
     };
 
     let api = build_api().await;
@@ -85,8 +87,8 @@ async fn when_an_event_is_deleted_should_not_read_afterwards() {
         details: EventDetails {
             subtitle: "Uma peça de Gil Vicente".to_string(),
             description:
-            "Uma comédia dramática que reflete sobre os vícios humanos e as escolhas morais."
-                .to_string(),
+                "Uma comédia dramática que reflete sobre os vícios humanos e as escolhas morais."
+                    .to_string(),
             image_url: "https://www.culturalkids.pt/wp-content/uploads/2021/04/Auto-01_1.jpg"
                 .to_string(),
         },
@@ -96,6 +98,7 @@ async fn when_an_event_is_deleted_should_not_read_afterwards() {
             times: "qui: 21h; sex: 21h; sáb: 21h; dom: 17h".to_string(),
         },
         venue: "Teatro Nacional D. Maria II, Lisboa".to_string(),
+        tags: vec!["festival".to_string()],
     };
 
     let api = build_api().await;
