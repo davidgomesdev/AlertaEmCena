@@ -1,13 +1,13 @@
 use super::model::{Event, EventDetails, Schedule};
 use futures::TryFutureExt;
+use lazy_static::lazy_static;
+use regex::Regex;
 use reqwest::Response;
 use scraper::{Html, Selector};
 use serde::{de, Deserialize, Deserializer};
 use serde_either::SingleOrVec;
 use serde_json::Value;
 use std::collections::{BTreeMap, HashSet};
-use lazy_static::lazy_static;
-use regex::Regex;
 use tracing::warn;
 use voca_rs::strip::strip_tags;
 
@@ -23,7 +23,9 @@ pub struct ResponseEvent {
     pub string_dates: String,
     pub string_times: String,
     #[serde(deserialize_with = "deserialize_btreemap")]
-    pub venue: BTreeMap<String, Venue>,
+    pub venue: BTreeMap<String, ResponseVenue>,
+    #[serde(deserialize_with = "deserialize_btreemap", rename = "tags_name_list")]
+    pub tags: BTreeMap<String, ResponseEventTag>,
 }
 
 lazy_static! {
@@ -43,7 +45,10 @@ impl ResponseEvent {
             self.title.rendered.to_string(),
             EventDetails::new(subtitle, description, self.featured_media_large.to_string()),
             self.link.to_string(),
-            Schedule::new(Self::get_date_description(&self.string_dates), self.string_times.to_string()),
+            Schedule::new(
+                Self::get_date_description(&self.string_dates),
+                self.string_times.to_string(),
+            ),
             self.venue
                 .iter()
                 .find(|(_, venue)| !venue.name.is_empty())
@@ -52,6 +57,7 @@ impl ResponseEvent {
                     warn!("No venue name found (omitting venue)");
                     "".to_string()
                 }),
+            self.tags.iter().map(|dto| dto.1.name.to_string()).collect(),
         )
     }
 
@@ -125,14 +131,21 @@ pub struct ResponseTitle {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct Venue {
+pub struct ResponseVenue {
     #[serde(deserialize_with = "deserialize_str")]
     pub name: String,
 }
 
-fn deserialize_btreemap<'de, D>(d: D) -> Result<BTreeMap<String, Venue>, D::Error>
+#[derive(Debug, Deserialize)]
+pub struct ResponseEventTag {
+    #[serde(deserialize_with = "deserialize_str")]
+    pub name: String,
+}
+
+fn deserialize_btreemap<'de, D, T>(d: D) -> Result<BTreeMap<String, T>, D::Error>
 where
     D: Deserializer<'de>,
+    T: Deserialize<'de>,
 {
     Ok(BTreeMap::deserialize(d).unwrap_or(BTreeMap::new()))
 }

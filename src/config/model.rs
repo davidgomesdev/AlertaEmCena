@@ -8,4 +8,5 @@ pub struct Config {
 
 pub struct DebugConfig {
     pub clear_channel: bool,
+    pub event_limit: Option<i32>,
 }
