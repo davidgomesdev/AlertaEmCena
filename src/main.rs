@@ -18,13 +18,32 @@ async fn main() {
         discord.delete_all_messages(config.artes_channel_id).await;
     }
 
-    send_new_events(&discord, &Category::Teatro, config.teatro_channel_id).await;
-    send_new_events(&discord, &Category::Artes, config.artes_channel_id).await;
+    send_new_events(
+        &discord,
+        &Category::Teatro,
+        config.teatro_channel_id,
+        config.debug_config.event_limit,
+    )
+    .await;
+    send_new_events(
+        &discord,
+        &Category::Artes,
+        config.artes_channel_id,
+        config.debug_config.event_limit,
+    )
+    .await;
 }
 
 #[instrument(skip(discord, channel_id), fields(channel_id = %channel_id.to_string()))]
-async fn send_new_events(discord: &DiscordAPI, category: &Category, channel_id: ChannelId) {
-    let events = AgendaCulturalAPI::get_events(category, None).await.unwrap();
+async fn send_new_events(
+    discord: &DiscordAPI,
+    category: &Category,
+    channel_id: ChannelId,
+    event_limit: Option<i32>,
+) {
+    let events = AgendaCulturalAPI::get_events(category, event_limit)
+        .await
+        .unwrap();
     let sent_events = discord.get_event_urls_sent(channel_id).await;
 
     info!("Channel has {} sent events", events.len());
