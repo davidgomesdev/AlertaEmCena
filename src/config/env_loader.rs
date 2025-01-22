@@ -11,7 +11,7 @@ pub fn load_config() -> Config {
 
     Config {
         debug_config: DebugConfig {
-            clear_channel: debug_clear_channel,Z
+            clear_channel: debug_clear_channel,
             event_limit: debug_event_limit,
         },
         teatro_channel_id,
