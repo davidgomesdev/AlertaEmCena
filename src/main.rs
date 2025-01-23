@@ -45,6 +45,28 @@ async fn send_new_events(
     event_limit: Option<i32>,
     emojis: &[EmojiConfig; 5],
 ) {
+    let new_events = get_new_events(discord, category, channel_id, event_limit).await;
+
+    if new_events.is_empty() {
+        info!("No new events to send");
+        return;
+    }
+
+    info!("Found {} new events", new_events.len());
+
+    for event in new_events {
+        let message = discord.send_event(channel_id, event).await;
+
+        add_voting_reactions(discord, &message, emojis).await;
+    }
+}
+
+async fn get_new_events(
+    discord: &DiscordAPI,
+    category: &Category,
+    channel_id: ChannelId,
+    event_limit: Option<i32>,
+) -> Vec<Event> {
     let events = AgendaCulturalAPI::get_events(category, event_limit)
         .await
         .unwrap();
@@ -56,19 +78,7 @@ async fn send_new_events(
         .into_iter()
         .filter(|event| !sent_events.contains(&event.link))
         .collect();
-
-    if unsent_events.is_empty() {
-        info!("No new events to send");
-        return;
-    }
-
-    info!("Found {} new events", unsent_events.len());
-
-    for event in unsent_events {
-        let message = discord.send_event(channel_id, event).await;
-
-        add_voting_reactions(discord, &message, emojis).await;
-    }
+    unsent_events
 }
 
 async fn add_voting_reactions(discord: &DiscordAPI, message: &Message, emojis: &[EmojiConfig; 5]) {
