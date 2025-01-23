@@ -1,6 +1,5 @@
 use crate::agenda_cultural::model::Event;
 use crate::config::model::EmojiConfig;
-use futures::FutureExt;
 use futures::{StreamExt, TryStreamExt};
 use serenity::all::{
     Colour, CreateEmbedAuthor, Embed, GatewayIntents, Message, ReactionType,
