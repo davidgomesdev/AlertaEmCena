@@ -1,8 +1,9 @@
 use alertaemcena::agenda_cultural::api::AgendaCulturalAPI;
 use alertaemcena::agenda_cultural::model::{Category, Event};
 use alertaemcena::config::env_loader::load_config;
+use alertaemcena::config::model::EmojiConfig;
 use alertaemcena::discord::api::DiscordAPI;
-use serenity::all::ChannelId;
+use serenity::all::{ChannelId, Message};
 use tracing::{info, instrument};
 
 #[tokio::main]
@@ -23,6 +24,7 @@ async fn main() {
         &Category::Teatro,
         config.teatro_channel_id,
         config.debug_config.event_limit,
+        &config.voting_emojis,
     )
     .await;
     send_new_events(
@@ -30,16 +32,18 @@ async fn main() {
         &Category::Artes,
         config.artes_channel_id,
         config.debug_config.event_limit,
+        &config.voting_emojis,
     )
     .await;
 }
 
-#[instrument(skip(discord, channel_id), fields(channel_id = %channel_id.to_string()))]
+#[instrument(skip(discord, channel_id, emojis), fields(channel_id = %channel_id.to_string()))]
 async fn send_new_events(
     discord: &DiscordAPI,
     category: &Category,
     channel_id: ChannelId,
     event_limit: Option<i32>,
+    emojis: &[EmojiConfig; 5],
 ) {
     let events = AgendaCulturalAPI::get_events(category, event_limit)
         .await
@@ -61,6 +65,14 @@ async fn send_new_events(
     info!("Found {} new events", unsent_events.len());
 
     for event in unsent_events {
-        discord.send_event(channel_id, event).await;
+        let message = discord.send_event(channel_id, event).await;
+
+        add_voting_reactions(discord, &message, emojis).await;
+    }
+}
+
+async fn add_voting_reactions(discord: &DiscordAPI, message: &Message, emojis: &[EmojiConfig; 5]) {
+    for emoji in emojis {
+        discord.vote_message(message, emoji).await;
     }
 }

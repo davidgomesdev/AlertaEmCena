@@ -1,12 +1,16 @@
 use crate::agenda_cultural::model::Event;
+use crate::config::model::EmojiConfig;
+use futures::FutureExt;
 use futures::{StreamExt, TryStreamExt};
-use serenity::all::{Colour, CreateEmbedAuthor, Embed, GatewayIntents, Message};
+use serenity::all::{
+    Colour, CreateEmbedAuthor, Embed, GatewayIntents, Message, ReactionType,
+};
 use serenity::builder::{CreateEmbed, CreateMessage};
 use serenity::model::id::ChannelId;
 use serenity::prelude::SerenityError;
 use serenity::Client;
 use std::env;
-use tracing::{debug, info, instrument};
+use tracing::{debug, error, info, instrument};
 
 const AUTHOR_NAME: &str = "AlertaEmCena";
 
@@ -32,7 +36,11 @@ impl DiscordAPI {
     }
 
     #[instrument(skip(self, channel_id), fields(channel_id = %channel_id.to_string(), event = %event.title.to_string()))]
-    pub async fn send_event(&self, channel_id: ChannelId, event: Event) {
+    pub async fn send_event(
+        &self,
+        channel_id: ChannelId,
+        event: Event
+    ) -> Message {
         info!("Sending event");
 
         let message_builder = CreateMessage::new().add_embed(
@@ -50,7 +58,37 @@ impl DiscordAPI {
         channel_id
             .send_message(&self.client.http, message_builder)
             .await
-            .expect("Failed to send message");
+            .expect("Failed to send message")
+    }
+
+    #[instrument(skip(self, message, emoji))]
+    pub async fn vote_message(&self, message: &Message, emoji: &EmojiConfig) {
+        debug!("Adding vote");
+
+        match message
+            .react(
+                &self.client.http,
+                ReactionType::Custom {
+                    animated: false,
+                    id: emoji.id
+                        .to_string()
+                        .parse()
+                        .expect("Invalid emoji ID format"),
+                    name: Some(emoji.name.to_string()),
+                },
+            )
+            .await
+        {
+            Ok(_) => {
+                debug!("Successfully added '{}' vote reaction", emoji.name);
+            }
+            Err(err) => {
+                error!(
+                    "Failed to add '{}' ID {} vote reaction on own message: {:?}",
+                    emoji.name, emoji.id, err
+                );
+            }
+        }
     }
 
     pub async fn get_event_urls_sent(&self, channel_id: ChannelId) -> Vec<String> {
