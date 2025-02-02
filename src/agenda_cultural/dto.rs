@@ -24,7 +24,10 @@ pub struct ResponseEvent {
     pub string_times: String,
     #[serde(deserialize_with = "deserialize_btreemap")]
     pub venue: BTreeMap<String, ResponseVenue>,
-    #[serde(deserialize_with = "deserialize_btreemap", rename = "tags_name_list")]
+    #[serde(
+        deserialize_with = "deserialize_btreemap",
+        rename = "tags_name_list"
+    )]
     pub tags: BTreeMap<String, ResponseEventTag>,
 }
 
@@ -139,9 +142,13 @@ pub struct ResponseEventTag {
 fn deserialize_btreemap<'de, D, T>(d: D) -> Result<BTreeMap<String, T>, D::Error>
 where
     D: Deserializer<'de>,
-    T: Deserialize<'de>,
+    T: Deserialize<'de>
 {
-    Ok(BTreeMap::deserialize(d).unwrap_or(BTreeMap::new()))
+    let value = Value::deserialize(d)?;
+    Ok(match value {
+        Value::Object(_) => { BTreeMap::deserialize(value).unwrap_or(BTreeMap::new()) }
+        _ => { BTreeMap::new() }
+    })
 }
 
 fn deserialize_str<'de, D>(d: D) -> Result<String, D::Error>
@@ -158,7 +165,7 @@ where
 mod tests {
     use super::*;
 
-    #[test]
+    #[test_log::test]
     fn when_a_date_spans_only_one_year_should_get_only_day_and_month() {
         let result = ResponseEvent::get_date_description("28 janeiro a 18 novembro 2025");
 
@@ -179,10 +186,124 @@ mod tests {
         assert_eq!(result, "2 novembro 2024 a 1 junho 2025");
     }
 
-    #[test]
+    #[test_log::test]
     fn when_a_date_has_only_one_day_should_get_day_and_month() {
         let result = ResponseEvent::get_date_description("3 maio 2025");
 
         assert_eq!(result, "3 maio");
+    }
+
+    #[test_log::test]
+    fn should_deserialize_event_without_tags() {
+        let dto = serde_json::from_str::<Vec<ResponseEvent>>(
+            r##"
+              [{
+                "id": 206968,
+                "type": "event",
+                "title": {
+                  "rendered": "Galafoice"
+                },
+                "featured_media_large": "https:\/\/www.agendalx.pt\/content\/uploads\/2025\/01\/galafoice.jpg",
+                "subtitle": [
+                  "Jo\u00e3o Moreira"
+                ],
+                "subject": "teatro",
+                "string_dates": "22 fevereiro a 23 fevereiro 2025",
+                "string_times": "s\u00e1b: 21h; dom: 17h",
+                "description": [
+                  "Espet\u00e1culo inaugural de uma trilogia autobiogr\u00e1fica e autoficcional de <span data-olk-copy-source=\"MessageBody\">Jo\u00e3o Moreira<\/span>. A pe\u00e7a \"funciona ao mesmo tempo como <em>recap<\/em> do passado..."
+                ],
+                "venue": {
+                  "teatro-iberico-2": {
+                    "id": 328,
+                    "slug": "teatro-iberico-2",
+                    "name": "Teatro Ib\u00e9rico"
+                  }
+                },
+                "categories_name_list": {
+                  "teatro": {
+                    "id": 43,
+                    "slug": "teatro",
+                    "name": "teatro"
+                  }
+                },
+                "tags_name_list": [],
+                "link": "https:\/\/www.agendalx.pt\/events\/event\/galafoice\/",
+                "occurences": [
+                  "2025-02-22",
+                  "2025-02-23"
+                ],
+                "StartDate": "2025-02-22",
+                "LastDate": "2025-02-23",
+                "price_cat": [
+                  "unknown"
+                ],
+                "price_val": "",
+                "target_audience": [],
+                "accessibility": []
+              }]"##,
+        );
+
+        assert!(dto.is_ok(), "{:?}", dto);
+    }
+
+    #[test_log::test]
+    fn should_deserialize_event_with_tags() {
+        let dto = serde_json::from_str::<Vec<ResponseEvent>>(
+            r##"
+              [{
+                "id": 206968,
+                "type": "event",
+                "title": {
+                  "rendered": "Galafoice"
+                },
+                "featured_media_large": "https:\/\/www.agendalx.pt\/content\/uploads\/2025\/01\/galafoice.jpg",
+                "subtitle": [
+                  "Jo\u00e3o Moreira"
+                ],
+                "subject": "teatro",
+                "string_dates": "22 fevereiro a 23 fevereiro 2025",
+                "string_times": "s\u00e1b: 21h; dom: 17h",
+                "description": [
+                  "Espet\u00e1culo inaugural de uma trilogia autobiogr\u00e1fica e autoficcional de <span data-olk-copy-source=\"MessageBody\">Jo\u00e3o Moreira<\/span>. A pe\u00e7a \"funciona ao mesmo tempo como <em>recap<\/em> do passado..."
+                ],
+                "venue": {
+                  "teatro-iberico-2": {
+                    "id": 328,
+                    "slug": "teatro-iberico-2",
+                    "name": "Teatro Ib\u00e9rico"
+                  }
+                },
+                "categories_name_list": {
+                  "teatro": {
+                    "id": 43,
+                    "slug": "teatro",
+                    "name": "teatro"
+                  }
+                },
+                "tags_name_list": {
+                  "gratuito": {
+                    "id": 5121,
+                    "slug": "gratuito",
+                    "name": "gratuito"
+                  }
+                },
+                "link": "https:\/\/www.agendalx.pt\/events\/event\/galafoice\/",
+                "occurences": [
+                  "2025-02-22",
+                  "2025-02-23"
+                ],
+                "StartDate": "2025-02-22",
+                "LastDate": "2025-02-23",
+                "price_cat": [
+                  "unknown"
+                ],
+                "price_val": "",
+                "target_audience": [],
+                "accessibility": []
+              }]"##,
+        );
+
+        assert!(dto.is_ok(), "{:?}", dto);
     }
 }
