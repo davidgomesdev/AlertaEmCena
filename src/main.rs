@@ -1,10 +1,11 @@
+use std::process::exit;
 use alertaemcena::agenda_cultural::api::AgendaCulturalAPI;
 use alertaemcena::agenda_cultural::model::{Category, Event};
 use alertaemcena::config::env_loader::load_config;
 use alertaemcena::config::model::EmojiConfig;
 use alertaemcena::discord::api::DiscordAPI;
 use serenity::all::{ChannelId, Message};
-use tracing::{info, instrument};
+use tracing::{debug, info, instrument};
 
 #[tokio::main]
 async fn main() {
@@ -12,11 +13,17 @@ async fn main() {
 
     let config = load_config();
 
+    debug!("Loaded {:#?}", config);
+
     let discord = DiscordAPI::default().await;
 
     if config.debug_config.clear_channel {
         discord.delete_all_messages(config.teatro_channel_id).await;
         discord.delete_all_messages(config.artes_channel_id).await;
+
+        if config.debug_config.exit_after_clearing {
+            exit(0)
+        }
     }
 
     send_new_events(
