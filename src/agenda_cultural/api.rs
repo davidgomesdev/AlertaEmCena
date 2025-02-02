@@ -1,6 +1,6 @@
+use std::collections::LinkedList;
 use super::{dto::ResponseEvent, model::Event};
 use crate::agenda_cultural::model::Category;
-use futures::future;
 use lazy_static::lazy_static;
 use reqwest::Client;
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
@@ -31,7 +31,7 @@ impl AgendaCulturalAPI {
     pub async fn get_events(
         category: &Category,
         amount_per_page: Option<i32>,
-    ) -> Result<Vec<Event>, APIError> {
+    ) -> Result<LinkedList<Event>, APIError> {
         match amount_per_page {
             None => {
                 info!("Getting all events");
@@ -62,8 +62,14 @@ impl AgendaCulturalAPI {
         let parsed_response = serde_json::from_str::<Vec<ResponseEvent>>(&json_response);
 
         match parsed_response {
-            Ok(mut parsed_response) => {
-                Ok(future::join_all(parsed_response.iter_mut().rev().map(|e| e.to_model())).await)
+            Ok(parsed_response) => {
+                let mut models = LinkedList::<Event>::new();
+
+                for response in parsed_response.iter() {
+                    models.push_back(response.to_model().await);
+                }
+
+                Ok(models)
             }
             Err(e) => {
                 error!("Response parse failed: {:?}", e);

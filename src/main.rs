@@ -84,7 +84,7 @@ async fn get_new_events(
         .unwrap();
     let sent_events = discord.get_event_urls_sent(channel_id).await;
 
-    info!("Channel has {} sent events", events.len());
+    info!("Channel has {} sent events", sent_events.len());
 
     let unsent_events: Vec<Event> = events
         .into_iter()
