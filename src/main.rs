@@ -2,7 +2,7 @@ use std::process::exit;
 use alertaemcena::agenda_cultural::api::AgendaCulturalAPI;
 use alertaemcena::agenda_cultural::model::{Category, Event};
 use alertaemcena::config::env_loader::load_config;
-use alertaemcena::config::model::EmojiConfig;
+use alertaemcena::config::model::{DebugConfig, EmojiConfig};
 use alertaemcena::discord::api::DiscordAPI;
 use serenity::all::{ChannelId, Message};
 use tracing::{debug, info, instrument};
@@ -30,7 +30,7 @@ async fn main() {
         &discord,
         &Category::Teatro,
         config.teatro_channel_id,
-        config.debug_config.event_limit,
+        &config.debug_config,
         &config.voting_emojis,
     )
     .await;
@@ -38,7 +38,7 @@ async fn main() {
         &discord,
         &Category::Artes,
         config.artes_channel_id,
-        config.debug_config.event_limit,
+        &config.debug_config,
         &config.voting_emojis,
     )
     .await;
@@ -49,10 +49,10 @@ async fn send_new_events(
     discord: &DiscordAPI,
     category: &Category,
     channel_id: ChannelId,
-    event_limit: Option<i32>,
+    debug_config: &DebugConfig,
     emojis: &[EmojiConfig; 5],
 ) {
-    let new_events = get_new_events(discord, category, channel_id, event_limit).await;
+    let new_events = get_new_events(discord, category, channel_id, debug_config.event_limit).await;
 
     if new_events.is_empty() {
         info!("No new events to send");
@@ -60,6 +60,11 @@ async fn send_new_events(
     }
 
     info!("Found {} new events", new_events.len());
+
+    if debug_config.skip_sending {
+        info!("Skipping sending events");
+        return
+    }
 
     for event in new_events {
         let message = discord.send_event(channel_id, event).await;
