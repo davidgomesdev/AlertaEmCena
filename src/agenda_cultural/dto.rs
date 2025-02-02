@@ -99,7 +99,7 @@ impl ResponseEvent {
 
         if full_page.is_err() {
             warn!("Using only preview description");
-            return strip_tags(&self.description.concat());
+            return Self::clean_description(&self.description.concat());
         }
 
         let page_html = Html::parse_fragment(full_page.unwrap().as_str());
@@ -118,7 +118,11 @@ impl ResponseEvent {
                 preview_description
             });
 
-        strip_tags(&description)
+        Self::clean_description(&description)
+    }
+
+    fn clean_description(description: &str) -> String {
+        strip_tags(description).replace("&nbsp;", " ")
     }
 }
 
