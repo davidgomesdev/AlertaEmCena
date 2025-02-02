@@ -7,14 +7,14 @@ pub fn load_config() -> Config {
     let artes_channel_id: ChannelId = load_channel_id_config("DISCORD_ARTES_CHANNEL_ID");
     let voting_emojis: [EmojiConfig; 5] = load_voting_emojis_config("VOTING_EMOJIS");
 
-    let debug_clear_channel = load_bool_config("DEBUG_CLEAR_CHANNEL", false);
-    let debug_event_limit = load_i32_config("DEBUG_EVENT_LIMIT");
+    let debug_config = DebugConfig {
+        clear_channel: load_bool_config("DEBUG_CLEAR_CHANNEL", false),
+        exit_after_clearing: load_bool_config("DEBUG_EXIT_AFTER_CLEARING", false),
+        event_limit: load_i32_config("DEBUG_EVENT_LIMIT"),
+    };
 
     Config {
-        debug_config: DebugConfig {
-            clear_channel: debug_clear_channel,
-            event_limit: debug_event_limit,
-        },
+        debug_config,
         teatro_channel_id,
         artes_channel_id,
         voting_emojis,
