@@ -36,6 +36,34 @@ async fn should_send_event() {
 }
 
 #[test_log::test(tokio::test)]
+async fn should_add_reaction_to_event() {
+    let api = build_api_without_cache()
+        .await;
+
+    api.delete_all_messages(*channel_id).await;
+
+    api
+        .send_event(*channel_id, Event {
+            title: "O Auto da Barca do Inferno".to_string(),
+            details: EventDetails {
+                subtitle: "Uma peça de Gil Vicente".to_string(),
+                description: "Uma comédia dramática que reflete sobre os vícios humanos e as escolhas morais.".to_string(),
+                image_url: "https://www.culturalkids.pt/wp-content/uploads/2021/04/Auto-01_1.jpg".to_string(),
+            },
+            link: "https://example.com/events/barca_inferno".to_string(),
+            occurring_at: Schedule {
+                dates: "21 setembro 2024 a 23 fevereiro 2025".to_string(),
+                times: "qui: 21h; sex: 21h; sáb: 21h; dom: 17h".to_string(),
+            },
+            venue: "Teatro Nacional D. Maria II, Lisboa".to_string(),
+            tags: vec!["festival".to_string()],
+        })
+        .await;
+
+    api.add_reaction_to_all_messages(*channel_id, '🔖').await;
+}
+
+#[test_log::test(tokio::test)]
 async fn should_read_events() {
     build_api().await.get_event_urls_sent(*channel_id).await;
 }
@@ -113,5 +141,9 @@ async fn when_an_event_is_deleted_should_not_read_afterwards() {
 }
 
 async fn build_api() -> DiscordAPI {
-    DiscordAPI::new(&token).await
+    DiscordAPI::new(&token, true).await
+}
+
+async fn build_api_without_cache() -> DiscordAPI {
+    DiscordAPI::new(&token, false).await
 }

@@ -1,15 +1,14 @@
 use crate::agenda_cultural::model::Event;
 use crate::config::model::EmojiConfig;
 use futures::{StreamExt, TryStreamExt};
-use serenity::all::{
-    Colour, CreateEmbedAuthor, Embed, GatewayIntents, Message, ReactionType,
-};
+use serenity::all::{Colour, CreateEmbedAuthor, Embed, Emoji, GatewayIntents, Message, ReactionType};
 use serenity::builder::{CreateEmbed, CreateMessage};
 use serenity::model::id::ChannelId;
 use serenity::prelude::SerenityError;
 use serenity::Client;
 use std::env;
-use tracing::{debug, error, info, instrument};
+use serenity::cache::Settings;
+use tracing::{debug, error, info, instrument, warn};
 
 const AUTHOR_NAME: &str = "AlertaEmCena";
 
@@ -19,27 +18,28 @@ pub struct DiscordAPI {
 
 impl DiscordAPI {
     pub async fn default() -> Self {
-        DiscordAPI::new(&env::var("DISCORD_TOKEN").expect("DISCORD_TOKEN not set")).await
+        DiscordAPI::new(&env::var("DISCORD_TOKEN").expect("DISCORD_TOKEN not set"), true).await
     }
 
-    pub async fn new(token: &str) -> Self {
+    pub async fn new(token: &str, cache_flag: bool) -> Self {
         let intents = GatewayIntents::GUILD_MESSAGES
             | GatewayIntents::MESSAGE_CONTENT
             | GatewayIntents::GUILD_MESSAGE_REACTIONS;
+        let mut cache_settings = Settings::default();
+
+        cache_settings.cache_channels = cache_flag;
+        cache_settings.max_messages = 100;
 
         Self {
             client: Client::builder(token, intents)
+                .cache_settings(cache_settings)
                 .await
                 .expect("Error creating discord client"),
         }
     }
 
     #[instrument(skip(self, channel_id), fields(channel_id = %channel_id.to_string(), event = %event.title.to_string()))]
-    pub async fn send_event(
-        &self,
-        channel_id: ChannelId,
-        event: Event
-    ) -> Message {
+    pub async fn send_event(&self, channel_id: ChannelId, event: Event) -> Message {
         info!("Sending event");
 
         let message_builder = CreateMessage::new().add_embed(
@@ -69,7 +69,8 @@ impl DiscordAPI {
                 &self.client.http,
                 ReactionType::Custom {
                     animated: false,
-                    id: emoji.id
+                    id: emoji
+                        .id
                         .to_string()
                         .parse()
                         .expect("Invalid emoji ID format"),
@@ -88,6 +89,22 @@ impl DiscordAPI {
                 );
             }
         }
+    }
+
+    pub async fn add_reaction_to_all_messages(&self, channel_id: ChannelId, emoji_char: char) {
+        channel_id
+            .messages_iter(&self.client.http)
+            .for_each(|message| async move {
+                match message {
+                    Ok(message) => {
+                        message.react(&self.client.http, ReactionType::from(emoji_char)).await.unwrap();
+                    }
+                    Err(err) => {
+                        warn!("Getting messages failed: {:?}", err)
+                    }
+                }
+            })
+            .await;
     }
 
     pub async fn get_event_urls_sent(&self, channel_id: ChannelId) -> Vec<String> {
