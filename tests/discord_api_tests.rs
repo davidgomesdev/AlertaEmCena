@@ -62,7 +62,8 @@ async fn should_add_reaction_to_event() {
         })
         .await;
 
-    api.add_reaction_to_message(&message, *SAVE_FOR_LATER_EMOJI).await;
+    api.add_reaction_to_message(&message, *SAVE_FOR_LATER_EMOJI)
+        .await;
 }
 
 #[test_log::test(tokio::test)]
@@ -116,7 +117,7 @@ async fn when_someone_react_with_save_later_should_add_that_person_to_message() 
         .get_messages(*channel_id)
         .await
         .into_iter()
-        .filter(|msg| {
+        .find(|msg| {
             let embed_url = msg
                 .embeds
                 .iter()
@@ -129,14 +130,15 @@ async fn when_someone_react_with_save_later_should_add_that_person_to_message() 
                 Some(embed_url) => embed_url.contains(&link.clone()),
             }
         })
-        .next()
         .unwrap();
 
     let saved_later = message
-        .embeds.first()
+        .embeds
+        .first()
         .unwrap()
         .fields
-        .iter().find(|field| field.name == "Interessados");
+        .iter()
+        .find(|field| field.name == "Interessados");
 
     assert!(saved_later.is_some());
     assert!(saved_later

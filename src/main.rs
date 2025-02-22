@@ -3,7 +3,6 @@ use alertaemcena::agenda_cultural::model::{Category, Event};
 use alertaemcena::config::env_loader::load_config;
 use alertaemcena::config::model::{Config, DebugConfig, EmojiConfig};
 use alertaemcena::discord::api::DiscordAPI;
-use futures::StreamExt;
 use lazy_static::lazy_static;
 use serenity::all::{ChannelId, Message};
 use std::process::exit;
@@ -39,11 +38,11 @@ async fn main() {
         Category::Teatro,
         config.teatro_channel_id,
     )
-        .await;
+    .await;
 }
 
 async fn run(config: &Config, discord: &DiscordAPI, category: Category, channel_id: ChannelId) {
-    backfill_save_later_reaction(discord, channel_id).await;
+    handle_save_for_later_feature(discord, channel_id).await;
 
     send_new_events(
         discord,
@@ -52,17 +51,22 @@ async fn run(config: &Config, discord: &DiscordAPI, category: Category, channel_
         &config.debug_config,
         &config.voting_emojis,
     )
-        .await;
+    .await;
 }
 
-async fn backfill_save_later_reaction(discord: &DiscordAPI, channel_id: ChannelId) {
-    info!("Backfilling save later reaction");
-    let mut messages = discord.get_all_messages(channel_id).await;
+async fn handle_save_for_later_feature(discord: &DiscordAPI, channel_id: ChannelId) {
+    let messages = discord.get_all_messages(channel_id).await;
 
     match messages {
         Ok(messages) => {
-            for message in messages {
-                discord.add_reaction_to_message(&message, *SAVE_FOR_LATER_EMOJI).await
+            info!("Backfilling save later reaction and mentioning");
+
+            for mut message in messages {
+                discord
+                    .add_reaction_to_message(&message, *SAVE_FOR_LATER_EMOJI)
+                    .await;
+
+                discord.tag_save_for_later_reactions(&mut message, *SAVE_FOR_LATER_EMOJI).await;
             }
         }
         Err(err) => warn!("Failed to react to a msg due to {}", err),
@@ -126,6 +130,6 @@ async fn add_feature_reactions(discord: &DiscordAPI, message: &Message, emojis: 
     }
 
     discord
-        .add_reaction_to_message(&message, *SAVE_FOR_LATER_EMOJI)
+        .add_reaction_to_message(message, *SAVE_FOR_LATER_EMOJI)
         .await;
 }
