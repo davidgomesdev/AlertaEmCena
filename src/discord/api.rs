@@ -1,9 +1,8 @@
 use crate::agenda_cultural::model::Event;
 use crate::config::model::EmojiConfig;
-use futures::{Stream, StreamExt, TryStreamExt};
+use futures::{StreamExt, TryStreamExt};
 use serenity::all::{
-    Colour, CreateEmbedAuthor, CurrentUser, Embed, GatewayIntents,
-    Message, ReactionType, UserId,
+    Colour, CreateEmbedAuthor, CurrentUser, Embed, GatewayIntents, Message, ReactionType,
 };
 use serenity::builder::{CreateEmbed, CreateMessage, EditMessage};
 use serenity::cache::Settings;
@@ -49,10 +48,7 @@ impl DiscordAPI {
 
         debug!("Own user id is {}", own_user.id);
 
-        Self {
-            client,
-            own_user,
-        }
+        Self { client, own_user }
     }
 
     pub async fn get_messages(&self, channel_id: ChannelId) -> Vec<Message> {
@@ -118,7 +114,10 @@ impl DiscordAPI {
     }
 
     pub async fn get_all_messages(&self, channel_id: ChannelId) -> serenity::Result<Vec<Message>> {
-        channel_id.messages_iter(&self.client.http).try_collect().await
+        channel_id
+            .messages_iter(&self.client.http)
+            .try_collect()
+            .await
     }
 
     pub async fn add_reaction_to_message(&self, message: &Message, emoji_char: char) {
@@ -136,11 +135,14 @@ impl DiscordAPI {
                 None,
                 None,
             )
-            .await.map(|users| users
+            .await
+            .map(|users| {
+                users
                     .into_iter()
                     .map(|user| user.id.to_string())
                     .filter(|user_id| *user_id != self.own_user.id.to_string())
-                    .collect())
+                    .collect()
+            })
             .expect("Couldn't get users that reacted!");
 
         debug!(
@@ -216,17 +218,4 @@ impl DiscordAPI {
                 .expect("Failed to delete messages");
         }
     }
-}
-
-pub struct DiscordUser {
-    user_id: UserId,
-    pub username: String,
-}
-
-enum Vote {
-    One,
-    Two,
-    Three,
-    Four,
-    Five,
 }
