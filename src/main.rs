@@ -1,11 +1,17 @@
-use std::process::exit;
 use alertaemcena::agenda_cultural::api::AgendaCulturalAPI;
 use alertaemcena::agenda_cultural::model::{Category, Event};
 use alertaemcena::config::env_loader::load_config;
 use alertaemcena::config::model::{Config, DebugConfig, EmojiConfig};
 use alertaemcena::discord::api::DiscordAPI;
+use futures::StreamExt;
+use lazy_static::lazy_static;
 use serenity::all::{ChannelId, Message};
-use tracing::{debug, info, instrument};
+use std::process::exit;
+use tracing::{debug, info, instrument, warn};
+
+lazy_static! {
+    static ref SAVE_FOR_LATER_EMOJI: char = '🔖';
+}
 
 #[tokio::main]
 async fn main() {
@@ -27,14 +33,20 @@ async fn main() {
     }
 
     run(&config, &discord, Category::Artes, config.artes_channel_id).await;
-    run(&config, &discord, Category::Teatro, config.teatro_channel_id).await;
+    run(
+        &config,
+        &discord,
+        Category::Teatro,
+        config.teatro_channel_id,
+    )
+        .await;
 }
 
 async fn run(config: &Config, discord: &DiscordAPI, category: Category, channel_id: ChannelId) {
     backfill_save_later_reaction(discord, channel_id).await;
 
     send_new_events(
-        &discord,
+        discord,
         &category,
         channel_id,
         &config.debug_config,
@@ -45,8 +57,16 @@ async fn run(config: &Config, discord: &DiscordAPI, category: Category, channel_
 
 async fn backfill_save_later_reaction(discord: &DiscordAPI, channel_id: ChannelId) {
     info!("Backfilling save later reaction");
+    let mut messages = discord.get_all_messages(channel_id).await;
 
-    discord.add_reaction_to_all_messages(channel_id, '🔖').await;
+    match messages {
+        Ok(messages) => {
+            for message in messages {
+                discord.add_reaction_to_message(&message, *SAVE_FOR_LATER_EMOJI).await
+            }
+        }
+        Err(err) => warn!("Failed to react to a msg due to {}", err),
+    }
 }
 
 #[instrument(skip(discord, channel_id, emojis), fields(channel_id = %channel_id.to_string()))]
@@ -70,13 +90,13 @@ async fn send_new_events(
 
     if debug_config.skip_sending {
         info!("Skipping sending events");
-        return
+        return;
     }
 
     for event in new_events {
         let message = discord.send_event(channel_id, event).await;
 
-        add_voting_reactions(discord, &message, emojis).await;
+        add_feature_reactions(discord, &message, emojis).await;
     }
 }
 
@@ -100,8 +120,12 @@ async fn get_new_events(
     unsent_events
 }
 
-async fn add_voting_reactions(discord: &DiscordAPI, message: &Message, emojis: &[EmojiConfig; 5]) {
+async fn add_feature_reactions(discord: &DiscordAPI, message: &Message, emojis: &[EmojiConfig; 5]) {
     for emoji in emojis {
-        discord.vote_message(message, emoji).await;
+        discord.add_custom_reaction(message, emoji).await;
     }
+
+    discord
+        .add_reaction_to_message(&message, *SAVE_FOR_LATER_EMOJI)
+        .await;
 }
