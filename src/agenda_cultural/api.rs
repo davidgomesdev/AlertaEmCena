@@ -1,4 +1,3 @@
-use std::collections::LinkedList;
 use super::{dto::ResponseEvent, model::Event};
 use crate::agenda_cultural::model::Category;
 use lazy_static::lazy_static;
@@ -6,6 +5,7 @@ use reqwest::Client;
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
 use reqwest_retry::policies::ExponentialBackoff;
 use reqwest_retry::RetryTransientMiddleware;
+use std::collections::LinkedList;
 use tracing::{error, info};
 
 const AGENDA_EVENTS_URL: &str = "https://www.agendalx.pt/wp-json/agendalx/v1/events";

@@ -24,10 +24,7 @@ pub struct ResponseEvent {
     pub string_times: String,
     #[serde(deserialize_with = "deserialize_btreemap")]
     pub venue: BTreeMap<String, ResponseVenue>,
-    #[serde(
-        deserialize_with = "deserialize_btreemap",
-        rename = "tags_name_list"
-    )]
+    #[serde(deserialize_with = "deserialize_btreemap", rename = "tags_name_list")]
     pub tags: BTreeMap<String, ResponseEventTag>,
 }
 
@@ -146,12 +143,12 @@ pub struct ResponseEventTag {
 fn deserialize_btreemap<'de, D, T>(d: D) -> Result<BTreeMap<String, T>, D::Error>
 where
     D: Deserializer<'de>,
-    T: Deserialize<'de>
+    T: Deserialize<'de>,
 {
     let value = Value::deserialize(d)?;
     Ok(match value {
-        Value::Object(_) => { BTreeMap::deserialize(value).unwrap_or(BTreeMap::new()) }
-        _ => { BTreeMap::new() }
+        Value::Object(_) => BTreeMap::deserialize(value).unwrap_or(BTreeMap::new()),
+        _ => BTreeMap::new(),
     })
 }
 
