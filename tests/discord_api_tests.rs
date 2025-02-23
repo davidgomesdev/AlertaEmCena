@@ -133,21 +133,11 @@ async fn when_someone_react_with_save_later_should_add_that_person_to_message() 
         .unwrap();
 
     let saved_later = message
-        .embeds
-        .first()
-        .unwrap()
-        .fields
-        .iter()
-        .find(|field| field.name == "Interessados");
+        .content;
 
-    assert!(saved_later.is_some());
     assert!(saved_later
-        .unwrap()
-        .value
         .contains(tester_api.own_user.id.to_string().as_str()));
     assert!(!saved_later
-        .unwrap()
-        .value
         .contains(api.own_user.id.to_string().as_str()));
 }
 
