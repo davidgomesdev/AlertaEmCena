@@ -134,7 +134,7 @@ impl DiscordAPI {
             .unwrap();
     }
 
-    #[instrument(skip(self, message, emoji_char), fields(event = %message.embeds.first().and_then(|embed| Some(embed.title.clone().unwrap())).unwrap_or_default()
+    #[instrument(skip(self, message, emoji_char), fields(event = %message.embeds.first().map(|embed| embed.title.clone().unwrap()).unwrap_or_default()
     ))]
     pub async fn tag_save_for_later_reactions(&self, message: &mut Message, emoji_char: char) {
         let user_ids_that_reacted: Vec<String> = message
@@ -162,10 +162,8 @@ impl DiscordAPI {
         let mut users_already_in_list = Vec::new();
 
         if let Some(user_ids) = USER_MENTION_REGEX.captures(&message.content) {
-            for user_id in user_ids.iter().skip(1) {
-                if let Some(user_id) = user_id {
-                    users_already_in_list.push(user_id.as_str());
-                }
+            for user_id in user_ids.iter().skip(1).flatten() {
+                users_already_in_list.push(user_id.as_str());
             }
         }
 
@@ -176,6 +174,11 @@ impl DiscordAPI {
             .map(|user| format!("<@{}>", user))
             .collect::<Vec<String>>()
             .join(" ");
+
+        if new_users.is_empty() {
+            debug!("No new users save for later");
+            return;
+        }
 
         info!("Found NEW users '{}' that saved for later", new_users);
 
