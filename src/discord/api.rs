@@ -1,6 +1,8 @@
 use crate::agenda_cultural::model::Event;
 use crate::config::model::EmojiConfig;
 use futures::{StreamExt, TryStreamExt};
+use lazy_static::lazy_static;
+use regex::Regex;
 use serenity::all::{
     Colour, CreateEmbedAuthor, CurrentUser, Embed, GatewayIntents, Message, ReactionType,
 };
@@ -10,9 +12,14 @@ use serenity::model::id::ChannelId;
 use serenity::prelude::SerenityError;
 use serenity::Client;
 use std::env;
-use tracing::{debug, error, info, instrument, warn};
+use tracing::{debug, error, info, instrument};
 
 const AUTHOR_NAME: &str = "AlertaEmCena";
+
+lazy_static! {
+    static ref USER_MENTION_REGEX: Regex =
+        Regex::new("<@(\\d+)>").expect("Failed to create mention regex");
+}
 
 pub struct DiscordAPI {
     client: Client,
@@ -127,8 +134,10 @@ impl DiscordAPI {
             .unwrap();
     }
 
+    #[instrument(skip(self, message, emoji_char), fields(event = %message.embeds.first().and_then(|embed| Some(embed.title.clone().unwrap())).unwrap_or_default()
+    ))]
     pub async fn tag_save_for_later_reactions(&self, message: &mut Message, emoji_char: char) {
-        let user_ids: Vec<String> = message
+        let user_ids_that_reacted: Vec<String> = message
             .reaction_users(
                 &self.client.http,
                 ReactionType::from(emoji_char),
@@ -147,46 +156,37 @@ impl DiscordAPI {
 
         debug!(
             "Found '{:?}' users that reacted to the new message",
-            user_ids
+            user_ids_that_reacted
         );
 
-        match message.embeds.first() {
-            None => {
-                warn!("No embeds found!")
-            }
-            Some(embed) => {
-                let embed_copy = embed.clone();
-                let users_already_in_list: String = embed_copy
-                    .fields
-                    .into_iter()
-                    .filter(|field| field.name == "Interessados")
-                    .map(|embed| embed.value)
-                    .next()
-                    .map(|value| value.to_string())
-                    .unwrap_or("".to_string());
-                let new_users = user_ids
-                    .iter()
-                    .map(|user_id| user_id.to_string())
-                    .filter(|user| !users_already_in_list.contains(user))
-                    .map(|user| format!("<@{}>", user))
-                    .collect::<Vec<String>>()
-                    .join(" ");
+        let mut users_already_in_list = Vec::new();
 
-                debug!("Found {} NEW users that reacted to message", new_users);
-
-                message
-                    .edit(
-                        &self.client.http,
-                        EditMessage::new().embed(CreateEmbed::from(embed.clone()).field(
-                            "Interessados",
-                            format!("{} {}", users_already_in_list, new_users),
-                            false,
-                        )),
-                    )
-                    .await
-                    .expect("Failed to edit message!");
+        if let Some(user_ids) = USER_MENTION_REGEX.captures(&message.content) {
+            for user_id in user_ids.iter().skip(1) {
+                if let Some(user_id) = user_id {
+                    users_already_in_list.push(user_id.as_str());
+                }
             }
-        };
+        }
+
+        let new_users = user_ids_that_reacted
+            .into_iter()
+            .map(|user_id| user_id.to_string())
+            .filter(|user| !users_already_in_list.contains(&&**user))
+            .map(|user| format!("<@{}>", user))
+            .collect::<Vec<String>>()
+            .join(" ");
+
+        info!("Found NEW users '{}' that saved for later", new_users);
+
+        message
+            .edit(
+                &self.client.http,
+                EditMessage::new()
+                    .content(format!("Interessados: {} {}", message.content, new_users)),
+            )
+            .await
+            .expect("Failed to edit message!");
     }
 
     pub async fn get_event_urls_sent(&self, channel_id: ChannelId) -> Vec<String> {

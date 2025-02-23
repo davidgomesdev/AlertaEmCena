@@ -62,11 +62,21 @@ async fn handle_save_for_later_feature(discord: &DiscordAPI, channel_id: Channel
             info!("Backfilling save later reaction and mentioning");
 
             for mut message in messages {
+                if message.embeds.is_empty() {
+                    warn!(
+                        "Found message without embed (id={}; content={})",
+                        message.id, message.content
+                    );
+                    continue;
+                }
+
                 discord
                     .add_reaction_to_message(&message, *SAVE_FOR_LATER_EMOJI)
                     .await;
 
-                discord.tag_save_for_later_reactions(&mut message, *SAVE_FOR_LATER_EMOJI).await;
+                discord
+                    .tag_save_for_later_reactions(&mut message, *SAVE_FOR_LATER_EMOJI)
+                    .await;
             }
         }
         Err(err) => warn!("Failed to react to a msg due to {}", err),
