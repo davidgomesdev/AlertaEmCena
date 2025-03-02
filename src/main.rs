@@ -42,7 +42,7 @@ async fn main() {
 }
 
 async fn run(config: &Config, discord: &DiscordAPI, category: Category, channel_id: ChannelId) {
-    handle_save_for_later_feature(discord, channel_id).await;
+    handle_save_for_later_feature(discord, channel_id, &config.voting_emojis).await;
 
     send_new_events(
         discord,
@@ -54,7 +54,7 @@ async fn run(config: &Config, discord: &DiscordAPI, category: Category, channel_
     .await;
 }
 
-async fn handle_save_for_later_feature(discord: &DiscordAPI, channel_id: ChannelId) {
+async fn handle_save_for_later_feature(discord: &DiscordAPI, channel_id: ChannelId, vote_emojis: &[EmojiConfig; 5]) {
     let messages = discord.get_all_messages(channel_id).await;
 
     match messages {
@@ -75,7 +75,7 @@ async fn handle_save_for_later_feature(discord: &DiscordAPI, channel_id: Channel
                     .await;
 
                 discord
-                    .tag_save_for_later_reactions(&mut message, *SAVE_FOR_LATER_EMOJI)
+                    .tag_save_for_later_reactions(&mut message, *SAVE_FOR_LATER_EMOJI, vote_emojis)
                     .await;
             }
         }

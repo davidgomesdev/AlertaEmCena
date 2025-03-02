@@ -4,7 +4,8 @@ use futures::{StreamExt, TryStreamExt};
 use lazy_static::lazy_static;
 use regex::Regex;
 use serenity::all::{
-    Colour, CreateEmbedAuthor, CurrentUser, Embed, GatewayIntents, GetMessages, Message, MessageId, PrivateChannel, ReactionType, User,
+    Colour, CreateEmbedAuthor, CurrentUser, Embed, GatewayIntents, GetMessages, Message, MessageId,
+    PrivateChannel, ReactionType, User,
 };
 use serenity::builder::{CreateEmbed, CreateMessage, EditMessage};
 use serenity::cache::Settings;
@@ -134,10 +135,16 @@ impl DiscordAPI {
             .unwrap();
     }
 
-    #[instrument(skip(self, message, emoji_char), fields(event = %message.embeds.first().map(|embed| embed.title.clone().unwrap()).unwrap_or_default()
+    #[instrument(skip(self, message, emoji_char, vote_emojis), fields(event = %message.embeds.first().map(|embed| embed.url.clone().unwrap()).unwrap_or_default()
     ))]
-    pub async fn tag_save_for_later_reactions(&self, message: &mut Message, emoji_char: char) {
-        let user_ids_that_reacted: Vec<String> = message
+    pub async fn tag_save_for_later_reactions(
+        &self,
+        message: &mut Message,
+        emoji_char: char,
+        vote_emojis: &[EmojiConfig; 5],
+    ) {
+        let users_that_voted: Vec<String> = self.get_user_votes(message, vote_emojis).await.iter().flatten().map(|user| user.id.to_string()).collect();
+        let saved_for_later_user_ids: Vec<String> = message
             .reaction_users(
                 &self.client.http,
                 ReactionType::from(emoji_char),
@@ -150,43 +157,30 @@ impl DiscordAPI {
                     .into_iter()
                     .map(|user| user.id.to_string())
                     .filter(|user_id| *user_id != self.own_user.id.to_string())
+                    .filter(|user_id| !users_that_voted.contains(&user_id))
                     .collect()
             })
             .expect("Couldn't get users that reacted!");
 
-        debug!(
-            "Found '{:?}' users that reacted to the new message",
-            user_ids_that_reacted
-        );
-
-        let mut users_already_in_list = Vec::new();
-
-        if let Some(user_ids) = USER_MENTION_REGEX.captures(&message.content) {
-            for user_id in user_ids.iter().skip(1).flatten() {
-                users_already_in_list.push(user_id.as_str());
-            }
+        if saved_for_later_user_ids.is_empty() && message.content.is_empty() {
+            debug!("No users saved for later");
+            return
         }
 
-        let new_users = user_ids_that_reacted
-            .into_iter()
-            .map(|user_id| user_id.to_string())
-            .filter(|user| !users_already_in_list.contains(&&**user))
-            .map(|user| format!("<@{}>", user))
-            .collect::<Vec<String>>()
-            .join(" ");
+        let mentions = saved_for_later_user_ids.iter().map(|user_id| format!("<@{}>", user_id)).collect::<Vec<String>>().join(" ");
+        let message_content = format!("Interessados: {}", mentions);
 
-        if new_users.is_empty() {
-            debug!("No new users save for later");
-            return;
+        if message_content == message.content {
+            return
         }
 
-        info!("Found NEW users '{}' that saved for later", new_users);
+        info!("Saved for later changed to '{}'", mentions);
 
         message
             .edit(
                 &self.client.http,
                 EditMessage::new()
-                    .content(format!("Interessados: {} {}", message.content, new_users)),
+                    .content(message_content),
             )
             .await
             .expect("Failed to edit message!");
@@ -195,7 +189,7 @@ impl DiscordAPI {
     pub async fn send_privately_users_vote(
         &self,
         event_message: &Message,
-        voting_emojis: [EmojiConfig; 5],
+        vote_emojis: [EmojiConfig; 5],
     ) {
         let mut event_embed = event_message.embeds.first().cloned().unwrap();
         let event_url = event_embed.url.clone();
@@ -205,6 +199,43 @@ impl DiscordAPI {
             return;
         }
 
+        let users_votes = self.get_user_votes(event_message, &vote_emojis).await;
+
+        if users_votes.is_empty() {
+            return;
+        }
+
+        let event_url = event_url.unwrap();
+
+        event_embed.fields = Vec::new();
+
+        for (vote, users) in users_votes.iter().enumerate() {
+            for user in users.iter().filter(|user| !user.bot) {
+                match user.create_dm_channel(&self.client.http).await {
+                    Ok(dm) => {
+                        debug!("Found user {} with vote {}", user.id, vote + 1);
+
+                        if !self.is_event_sent_in_dm(&event_url, &dm).await {
+                            self.send_user_vote_in_dm(&vote_emojis[vote], &event_embed, &dm)
+                                .await;
+                        }
+                    }
+                    Err(error) => {
+                        warn!(
+                            "Couldn't create DM channel for user '{}' due to: {}",
+                            user.name, error
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    async fn get_user_votes(
+        &self,
+        event_message: &Message,
+        vote_emojis: &[EmojiConfig; 5],
+    ) -> [Vec<User>; 5] {
         let mut users_votes: [Vec<User>; 5] = [vec![], vec![], vec![], vec![], vec![]];
         let own_user = self
             .client
@@ -214,7 +245,7 @@ impl DiscordAPI {
             .map(|user| user.id)
             .unwrap_or_default();
 
-        for (index, voting_emoji) in voting_emojis.iter().enumerate() {
+        for (index, voting_emoji) in vote_emojis.iter().enumerate() {
             let users_that_reacted: Vec<User> = event_message
                 .reaction_users(
                     &self.client.http,
@@ -234,42 +265,15 @@ impl DiscordAPI {
                 .expect("Couldn't get users that reacted!");
 
             for user in users_that_reacted {
-                if user.id == own_user || user.bot {
-                    continue
+                if user.id == own_user {
+                    continue;
                 }
 
                 users_votes[index].push(user);
             }
         }
 
-        if users_votes.is_empty() {
-            return
-        }
-
-        let event_url = event_url.unwrap();
-
-        event_embed.fields = Vec::new();
-
-        for (vote, users) in users_votes.iter().enumerate() {
-            for user in users {
-                match user.create_dm_channel(&self.client.http).await {
-                    Ok(dm) => {
-                        debug!("Found user {} with vote {}", user.id, vote+1);
-
-                        if !self.is_event_sent_in_dm(&event_url, &dm).await {
-                            self.send_user_vote_in_dm(&voting_emojis[vote], &event_embed, &dm)
-                                .await;
-                        }
-                    }
-                    Err(error) => {
-                        warn!(
-                            "Couldn't create DM channel for user '{}' due to: {}",
-                            user.name, error
-                        );
-                    }
-                }
-            }
-        }
+        users_votes
     }
 
     #[instrument(skip(self, vote_emoji, event_embed, dm), fields(user_name = %dm.recipient.name.to_string(), vote = %vote_emoji.name.to_string(), event_url = event_embed.url))]
