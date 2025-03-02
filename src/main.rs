@@ -1,15 +1,15 @@
-use alertaemcena::agenda_cultural::api::AgendaCulturalAPI;
-use alertaemcena::agenda_cultural::model::{Category, Event};
+use alertaemcena::agenda_cultural::model::Category;
 use alertaemcena::config::env_loader::load_config;
 use alertaemcena::config::model::{Config, DebugConfig, EmojiConfig};
 use alertaemcena::discord::api::DiscordAPI;
 use lazy_static::lazy_static;
-use serenity::all::{ChannelId, Message};
+use serenity::all::ChannelId;
 use std::process::exit;
 use tracing::{debug, info, instrument, warn};
+use alertaemcena::api::*;
 
 lazy_static! {
-    static ref SAVE_FOR_LATER_EMOJI: char = '🔖';
+    pub static ref SAVE_FOR_LATER_EMOJI: char = '🔖';
 }
 
 #[tokio::main]
@@ -110,36 +110,6 @@ async fn send_new_events(
     for event in new_events {
         let message = discord.send_event(channel_id, event).await;
 
-        add_feature_reactions(discord, &message, emojis).await;
+        add_feature_reactions(discord, &message, emojis, *SAVE_FOR_LATER_EMOJI).await;
     }
-}
-
-async fn get_new_events(
-    discord: &DiscordAPI,
-    category: &Category,
-    channel_id: ChannelId,
-    event_limit: Option<i32>,
-) -> Vec<Event> {
-    let events = AgendaCulturalAPI::get_events(category, event_limit)
-        .await
-        .unwrap();
-    let sent_events = discord.get_event_urls_sent(channel_id).await;
-
-    info!("Channel has {} sent events", sent_events.len());
-
-    let unsent_events: Vec<Event> = events
-        .into_iter()
-        .filter(|event| !sent_events.contains(&event.link))
-        .collect();
-    unsent_events
-}
-
-async fn add_feature_reactions(discord: &DiscordAPI, message: &Message, emojis: &[EmojiConfig; 5]) {
-    for emoji in emojis {
-        discord.add_custom_reaction(message, emoji).await;
-    }
-
-    discord
-        .add_reaction_to_message(message, *SAVE_FOR_LATER_EMOJI)
-        .await;
 }

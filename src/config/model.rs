@@ -1,3 +1,4 @@
+use std::fmt::Display;
 use serenity::all::ChannelId;
 
 #[derive(Debug)]
@@ -16,8 +17,14 @@ pub struct DebugConfig {
     pub event_limit: Option<i32>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct EmojiConfig {
     pub id: i64,
     pub name: String,
+}
+
+impl Display for EmojiConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "<:{}:{}>", self.name, self.id)
+    }
 }
