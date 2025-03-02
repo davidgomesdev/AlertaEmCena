@@ -1,12 +1,12 @@
 use alertaemcena::agenda_cultural::model::*;
+use alertaemcena::api::add_feature_reactions;
+use alertaemcena::config::env_loader::load_voting_emojis_config;
 use alertaemcena::discord::api::DiscordAPI;
 use lazy_static::lazy_static;
 use serenity::all::ChannelId;
 use std::env;
 use std::time::Duration;
 use uuid::Uuid;
-use alertaemcena::api::add_feature_reactions;
-use alertaemcena::config::env_loader::load_voting_emojis_config;
 
 lazy_static! {
     static ref token: String = env::var("DISCORD_TOKEN").expect("DISCORD_TOKEN not set");
@@ -107,12 +107,13 @@ async fn when_someone_reacts_with_save_later_should_add_that_person_to_message()
     let api = build_api().await;
 
     let mut message = api.send_event(*channel_id, unique_event).await;
-    api.add_reaction_to_message(&message, '🔖').await;
+    api.add_reaction_to_message(&message, *SAVE_FOR_LATER_EMOJI).await;
 
     let tester_api = build_tester_api().await;
+    let voting_emojis = load_voting_emojis_config("VOTING_EMOJIS");
 
-    tester_api.add_reaction_to_message(&message, '🔖').await;
-    api.tag_save_for_later_reactions(&mut message, '🔖').await;
+    tester_api.add_reaction_to_message(&message, *SAVE_FOR_LATER_EMOJI).await;
+    api.tag_save_for_later_reactions(&mut message, *SAVE_FOR_LATER_EMOJI, &voting_emojis).await;
 
     let message = tester_api
         .get_messages(*channel_id)
@@ -143,6 +144,35 @@ async fn when_someone_reacts_with_save_later_should_add_that_person_to_message()
 }
 
 #[test_log::test(tokio::test)]
+async fn when_someone_removes_save_for_later_react_should_add_remove_that_person_from_the_message() {
+    let (_, unique_event) = generate_random_event();
+
+    let api = build_api().await;
+
+    let mut message = api.send_event(*channel_id, unique_event).await;
+    api.add_reaction_to_message(&message, *SAVE_FOR_LATER_EMOJI).await;
+
+    let tester_api = build_tester_api().await;
+    let voting_emojis = load_voting_emojis_config("VOTING_EMOJIS");
+
+    tester_api.add_reaction_to_message(&message, *SAVE_FOR_LATER_EMOJI).await;
+    api.tag_save_for_later_reactions(&mut message, *SAVE_FOR_LATER_EMOJI, &voting_emojis).await;
+    
+    message.delete_reaction_emoji(&tester_api.client.http, *SAVE_FOR_LATER_EMOJI).await.unwrap();
+    api.tag_save_for_later_reactions(&mut message, *SAVE_FOR_LATER_EMOJI, &voting_emojis).await;
+
+    let message = tester_api.client.http.clone().get_message(*channel_id, message.id).await.unwrap();
+
+    let saved_later = message
+        .content;
+
+    assert!(!saved_later
+        .contains(tester_api.own_user.id.to_string().as_str()));
+    assert!(!saved_later
+        .contains(api.own_user.id.to_string().as_str()));
+}
+
+#[test_log::test(tokio::test)]
 async fn should_send_the_voted_event_message_via_dm_only_once() {
     let (_, unique_event) = generate_random_event();
 
@@ -164,47 +194,33 @@ async fn should_send_the_voted_event_message_via_dm_only_once() {
     api.send_privately_users_vote(&message, voting_emojis).await;
 }
 
-// #[test_log::test(tokio::test)]
-// async fn when_someone_reacts_with_a_four_vote_and_save_later_should_remove_the_user_from_interested() {
-//     let (link, unique_event) = generate_random_event();
-//
-//     let api = build_api().await;
-//
-//     let mut message = api.send_event(*channel_id, unique_event).await;
-//     api.add_reaction_to_message(&message, '🔖').await;
-//
-//     let tester_api = build_tester_api().await;
-//
-//     tester_api.add_reaction_to_message(&message, '🔖').await;
-//     api.tag_save_for_later_reactions(&mut message, '🔖').await;
-//
-//     let message = tester_api
-//         .get_messages(*channel_id)
-//         .await
-//         .into_iter()
-//         .find(|msg| {
-//             let embed_url = msg
-//                 .embeds
-//                 .iter()
-//                 .flat_map(|embed| embed.url.clone())
-//                 .collect::<Vec<String>>()
-//                 .pop();
-//
-//             match embed_url {
-//                 None => false,
-//                 Some(embed_url) => embed_url.contains(&link.clone()),
-//             }
-//         })
-//         .unwrap();
-//
-//     let saved_later = message
-//         .content;
-//
-//     assert!(saved_later
-//         .contains(tester_api.own_user.id.to_string().as_str()));
-//     assert!(!saved_later
-//         .contains(api.own_user.id.to_string().as_str()));
-// }
+#[test_log::test(tokio::test)]
+async fn when_someone_saves_for_later_reacts_with_a_three_vote_should_remove_the_user_from_interested() {
+    let (_, unique_event) = generate_random_event();
+
+    let api = build_api().await;
+
+    let mut message = api.send_event(*channel_id, unique_event).await;
+    let voting_emojis = load_voting_emojis_config("VOTING_EMOJIS");
+
+    add_feature_reactions(&api, &message, &voting_emojis, *SAVE_FOR_LATER_EMOJI).await;
+
+    let tester_api = build_tester_api().await;
+
+    tester_api.add_reaction_to_message(&message, *SAVE_FOR_LATER_EMOJI).await;
+    tester_api.add_custom_reaction(&message, &voting_emojis[2]).await;
+
+    api.tag_save_for_later_reactions(&mut message, *SAVE_FOR_LATER_EMOJI, &voting_emojis).await;
+
+    let message = tester_api.client.http.get_message(*channel_id, message.id).await.expect("Failed getting sent message");
+    let saved_later = message
+        .content;
+
+    assert!(!saved_later
+        .contains(tester_api.own_user.id.to_string().as_str()));
+    assert!(!saved_later
+        .contains(api.own_user.id.to_string().as_str()));
+}
 
 fn generate_random_event() -> (String, Event) {
     let test_id = Uuid::new_v4();
