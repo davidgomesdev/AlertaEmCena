@@ -4,7 +4,7 @@ use futures::{StreamExt, TryStreamExt};
 use lazy_static::lazy_static;
 use regex::Regex;
 use serenity::all::{
-    Colour, CreateEmbedAuthor, CurrentUser, Embed, GatewayIntents, Message, ReactionType,
+    Colour, CreateEmbedAuthor, CurrentUser, Embed, GatewayIntents, GetMessages, Message, MessageId, PrivateChannel, ReactionType, User,
 };
 use serenity::builder::{CreateEmbed, CreateMessage, EditMessage};
 use serenity::cache::Settings;
@@ -12,7 +12,7 @@ use serenity::model::id::ChannelId;
 use serenity::prelude::SerenityError;
 use serenity::Client;
 use std::env;
-use tracing::{debug, error, info, instrument};
+use tracing::{debug, error, info, instrument, warn};
 
 const AUTHOR_NAME: &str = "AlertaEmCena";
 
@@ -22,7 +22,7 @@ lazy_static! {
 }
 
 pub struct DiscordAPI {
-    client: Client,
+    pub client: Client,
     pub own_user: CurrentUser,
 }
 
@@ -190,6 +190,145 @@ impl DiscordAPI {
             )
             .await
             .expect("Failed to edit message!");
+    }
+
+    pub async fn send_privately_users_vote(
+        &self,
+        event_message: &Message,
+        voting_emojis: [EmojiConfig; 5],
+    ) {
+        let mut event_embed = event_message.embeds.first().cloned().unwrap();
+        let event_url = event_embed.url.clone();
+
+        if event_url.is_none() {
+            warn!("Event has no URL!");
+            return;
+        }
+
+        let mut users_votes: [Vec<User>; 5] = [vec![], vec![], vec![], vec![], vec![]];
+        let own_user = self
+            .client
+            .http
+            .get_current_user()
+            .await
+            .map(|user| user.id)
+            .unwrap_or_default();
+
+        for (index, voting_emoji) in voting_emojis.iter().enumerate() {
+            let users_that_reacted: Vec<User> = event_message
+                .reaction_users(
+                    &self.client.http,
+                    ReactionType::Custom {
+                        animated: false,
+                        id: voting_emoji
+                            .id
+                            .to_string()
+                            .parse()
+                            .expect("Invalid emoji ID format"),
+                        name: Some(voting_emoji.name.to_string()),
+                    },
+                    None,
+                    None,
+                )
+                .await
+                .expect("Couldn't get users that reacted!");
+
+            for user in users_that_reacted {
+                if user.id == own_user || user.bot {
+                    continue
+                }
+
+                users_votes[index].push(user);
+            }
+        }
+
+        if users_votes.is_empty() {
+            return
+        }
+
+        let event_url = event_url.unwrap();
+
+        event_embed.fields = Vec::new();
+
+        for (vote, users) in users_votes.iter().enumerate() {
+            for user in users {
+                match user.create_dm_channel(&self.client.http).await {
+                    Ok(dm) => {
+                        debug!("Found user {} with vote {}", user.id, vote+1);
+
+                        if !self.is_event_sent_in_dm(&event_url, &dm).await {
+                            self.send_user_vote_in_dm(&voting_emojis[vote], &event_embed, &dm)
+                                .await;
+                        }
+                    }
+                    Err(error) => {
+                        warn!(
+                            "Couldn't create DM channel for user '{}' due to: {}",
+                            user.name, error
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[instrument(skip(self, vote_emoji, event_embed, dm), fields(user_name = %dm.recipient.name.to_string(), vote = %vote_emoji.name.to_string(), event_url = event_embed.url))]
+    async fn send_user_vote_in_dm(
+        &self,
+        vote_emoji: &EmojiConfig,
+        event_embed: &Embed,
+        dm: &PrivateChannel,
+    ) {
+        info!("Sending vote");
+
+        let embed = CreateEmbed::from(event_embed.clone()).description(format!(
+            "{}\n**Voto:** {}",
+            event_embed.description.clone().unwrap(),
+            vote_emoji
+        ));
+
+        dm.send_message(&self.client.http, CreateMessage::new().embed(embed))
+            .await
+            .expect("Failed to send message");
+    }
+
+    async fn is_event_sent_in_dm(&self, event_url: &str, dm: &PrivateChannel) -> bool {
+        let mut last_message_id: Option<MessageId> = None;
+        let mut searched_all_dms = false;
+        let mut is_found = false;
+
+        while !searched_all_dms {
+            let mut filter = GetMessages::default();
+
+            if let Some(last_message_id) = last_message_id {
+                filter = filter.before(last_message_id)
+            }
+
+            let messages_iter = dm
+                .messages(&self.client.http, filter)
+                .await
+                .expect("Couldn't get dm message!");
+
+            if messages_iter.iter().any(|msg| {
+                msg.embeds
+                    .first()
+                    .and_then(|embed| embed.url.clone())
+                    .unwrap_or_default()
+                    == event_url
+            }) {
+                is_found = true;
+                break;
+            }
+
+            match messages_iter.first() {
+                None => {
+                    searched_all_dms = true;
+                }
+                Some(last_message) => last_message_id = Some(last_message.id),
+            }
+        }
+
+        is_found
     }
 
     pub async fn get_event_urls_sent(&self, channel_id: ChannelId) -> Vec<String> {

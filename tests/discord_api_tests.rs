@@ -3,7 +3,10 @@ use alertaemcena::discord::api::DiscordAPI;
 use lazy_static::lazy_static;
 use serenity::all::ChannelId;
 use std::env;
+use std::time::Duration;
 use uuid::Uuid;
+use alertaemcena::api::add_feature_reactions;
+use alertaemcena::config::env_loader::load_voting_emojis_config;
 
 lazy_static! {
     static ref token: String = env::var("DISCORD_TOKEN").expect("DISCORD_TOKEN not set");
@@ -41,8 +44,6 @@ async fn should_send_event() {
 #[test_log::test(tokio::test)]
 async fn should_add_reaction_to_event() {
     let api = build_api_without_cache().await;
-
-    api.delete_all_messages(*channel_id).await;
 
     let message = api
         .send_event(*channel_id, Event {
@@ -90,9 +91,9 @@ async fn when_an_event_is_deleted_should_not_read_afterwards() {
 
     let api = build_api().await;
 
-    api.send_event(*channel_id, unique_event).await;
+    let message = api.send_event(*channel_id, unique_event).await;
 
-    api.delete_all_messages(*channel_id).await;
+    message.delete(&api.client.http).await.expect("Failed deleting event sent");
 
     let is_event_sent = api.get_event_urls_sent(*channel_id).await.contains(&link);
 
@@ -100,7 +101,7 @@ async fn when_an_event_is_deleted_should_not_read_afterwards() {
 }
 
 #[test_log::test(tokio::test)]
-async fn when_someone_react_with_save_later_should_add_that_person_to_message() {
+async fn when_someone_reacts_with_save_later_should_add_that_person_to_message() {
     let (link, unique_event) = generate_random_event();
 
     let api = build_api().await;
@@ -141,10 +142,74 @@ async fn when_someone_react_with_save_later_should_add_that_person_to_message() 
         .contains(api.own_user.id.to_string().as_str()));
 }
 
+#[test_log::test(tokio::test)]
+async fn should_send_the_voted_event_message_via_dm_only_once() {
+    let (_, unique_event) = generate_random_event();
+
+    let api = build_api().await;
+
+    let message = api.send_event(*channel_id, unique_event).await;
+    let voting_emojis = load_voting_emojis_config("VOTING_EMOJIS");
+
+    add_feature_reactions(&api, &message, &voting_emojis, *SAVE_FOR_LATER_EMOJI).await;
+
+    let tester_api = build_tester_api().await;
+
+    tester_api.add_custom_reaction(&message, &voting_emojis[3]).await;
+
+    // allows manual testing - bots can't vote on each other
+    tokio::time::sleep(Duration::from_secs(5)).await;
+
+    api.send_privately_users_vote(&message, voting_emojis.clone()).await;
+    api.send_privately_users_vote(&message, voting_emojis).await;
+}
+
+// #[test_log::test(tokio::test)]
+// async fn when_someone_reacts_with_a_four_vote_and_save_later_should_remove_the_user_from_interested() {
+//     let (link, unique_event) = generate_random_event();
+//
+//     let api = build_api().await;
+//
+//     let mut message = api.send_event(*channel_id, unique_event).await;
+//     api.add_reaction_to_message(&message, '🔖').await;
+//
+//     let tester_api = build_tester_api().await;
+//
+//     tester_api.add_reaction_to_message(&message, '🔖').await;
+//     api.tag_save_for_later_reactions(&mut message, '🔖').await;
+//
+//     let message = tester_api
+//         .get_messages(*channel_id)
+//         .await
+//         .into_iter()
+//         .find(|msg| {
+//             let embed_url = msg
+//                 .embeds
+//                 .iter()
+//                 .flat_map(|embed| embed.url.clone())
+//                 .collect::<Vec<String>>()
+//                 .pop();
+//
+//             match embed_url {
+//                 None => false,
+//                 Some(embed_url) => embed_url.contains(&link.clone()),
+//             }
+//         })
+//         .unwrap();
+//
+//     let saved_later = message
+//         .content;
+//
+//     assert!(saved_later
+//         .contains(tester_api.own_user.id.to_string().as_str()));
+//     assert!(!saved_later
+//         .contains(api.own_user.id.to_string().as_str()));
+// }
+
 fn generate_random_event() -> (String, Event) {
     let test_id = Uuid::new_v4();
     let link = format!(
-        "https://example.com/events/barca_infern?test_id={}",
+        "https://example.com/events/barca_inferno?test_id={}",
         test_id
     );
     let unique_event = Event {

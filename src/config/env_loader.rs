@@ -29,7 +29,7 @@ fn load_channel_id_config(name: &str) -> ChannelId {
         .unwrap_or_else(|_| panic!("{} is not a valid Discord channel ID", name))
 }
 
-fn load_voting_emojis_config(name: &str) -> [EmojiConfig; 5] {
+pub fn load_voting_emojis_config(name: &str) -> [EmojiConfig; 5] {
     let config = env::var(name).unwrap_or_else(|_| panic!("{} must be set.", name));
 
     let emojis: [&str; 5] = config
