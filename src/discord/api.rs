@@ -157,7 +157,7 @@ impl DiscordAPI {
                     .into_iter()
                     .map(|user| user.id.to_string())
                     .filter(|user_id| *user_id != self.own_user.id.to_string())
-                    .filter(|user_id| !users_that_voted.contains(&user_id))
+                    .filter(|user_id| !users_that_voted.contains(user_id))
                     .collect()
             })
             .expect("Couldn't get users that reacted!");
@@ -189,7 +189,7 @@ impl DiscordAPI {
     pub async fn send_privately_users_vote(
         &self,
         event_message: &Message,
-        vote_emojis: [EmojiConfig; 5],
+        vote_emojis: &[EmojiConfig; 5],
     ) {
         let mut event_embed = event_message.embeds.first().cloned().unwrap();
         let event_url = event_embed.url.clone();
@@ -199,7 +199,7 @@ impl DiscordAPI {
             return;
         }
 
-        let users_votes = self.get_user_votes(event_message, &vote_emojis).await;
+        let users_votes = self.get_user_votes(event_message, vote_emojis).await;
 
         if users_votes.is_empty() {
             return;
