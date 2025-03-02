@@ -53,3 +53,4 @@ jobs:
         DISCORD_CHANNEL_ID: ${{ secrets.DISCORD_CHANNEL_ID }}
         DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
         DISCORD_TESTER_TOKEN: ${{ secrets.DISCORD_TESTER_TOKEN }}
+        VOTING_EMOJIS: ${{ secrets.VOTING_EMOJIS }}

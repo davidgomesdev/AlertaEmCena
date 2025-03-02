@@ -1,4 +1,5 @@
 use alertaemcena::agenda_cultural::model::Category;
+use alertaemcena::api::*;
 use alertaemcena::config::env_loader::load_config;
 use alertaemcena::config::model::{Config, DebugConfig, EmojiConfig};
 use alertaemcena::discord::api::DiscordAPI;
@@ -6,7 +7,6 @@ use lazy_static::lazy_static;
 use serenity::all::ChannelId;
 use std::process::exit;
 use tracing::{debug, info, instrument, warn};
-use alertaemcena::api::*;
 
 lazy_static! {
     pub static ref SAVE_FOR_LATER_EMOJI: char = '🔖';
@@ -42,7 +42,7 @@ async fn main() {
 }
 
 async fn run(config: &Config, discord: &DiscordAPI, category: Category, channel_id: ChannelId) {
-    handle_save_for_later_feature(discord, channel_id, &config.voting_emojis).await;
+    handle_reaction_features(discord, channel_id, &config.voting_emojis).await;
 
     send_new_events(
         discord,
@@ -54,32 +54,37 @@ async fn run(config: &Config, discord: &DiscordAPI, category: Category, channel_
     .await;
 }
 
-async fn handle_save_for_later_feature(discord: &DiscordAPI, channel_id: ChannelId, vote_emojis: &[EmojiConfig; 5]) {
-    let messages = discord.get_all_messages(channel_id).await;
+#[instrument(skip(discord, channel_id, vote_emojis), fields(channel_id = %channel_id.to_string()))]
+async fn handle_reaction_features(
+    discord: &DiscordAPI,
+    channel_id: ChannelId,
+    vote_emojis: &[EmojiConfig; 5],
+) {
+    let messages = discord
+        .get_all_messages(channel_id)
+        .await
+        .expect("Failed to get messages");
 
-    match messages {
-        Ok(messages) => {
-            info!("Backfilling save later reaction and mentioning");
+    info!("Tagging save for later and sending votes in DM");
 
-            for mut message in messages {
-                if message.embeds.is_empty() {
-                    warn!(
-                        "Found message without embed (id={}; content={})",
-                        message.id, message.content
-                    );
-                    continue;
-                }
-
-                discord
-                    .add_reaction_to_message(&message, *SAVE_FOR_LATER_EMOJI)
-                    .await;
-
-                discord
-                    .tag_save_for_later_reactions(&mut message, *SAVE_FOR_LATER_EMOJI, vote_emojis)
-                    .await;
-            }
+    for mut message in messages {
+        if message.embeds.is_empty() {
+            warn!(
+                "Found message without embed (id={}; content={})",
+                message.id, message.content
+            );
+            continue;
         }
-        Err(err) => warn!("Failed to react to a msg due to {}", err),
+
+        discord
+            .add_reaction_to_message(&message, *SAVE_FOR_LATER_EMOJI)
+            .await;
+
+        discord
+            .tag_save_for_later_reactions(&mut message, *SAVE_FOR_LATER_EMOJI, vote_emojis)
+            .await;
+
+        discord.send_privately_users_vote(&message, vote_emojis).await;
     }
 }
 

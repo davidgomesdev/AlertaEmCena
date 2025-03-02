@@ -190,8 +190,8 @@ async fn should_send_the_voted_event_message_via_dm_only_once() {
     // allows manual testing - bots can't vote on each other
     tokio::time::sleep(Duration::from_secs(5)).await;
 
-    api.send_privately_users_vote(&message, voting_emojis.clone()).await;
-    api.send_privately_users_vote(&message, voting_emojis).await;
+    api.send_privately_users_vote(&message, &voting_emojis).await;
+    api.send_privately_users_vote(&message, &voting_emojis).await;
 }
 
 #[test_log::test(tokio::test)]
