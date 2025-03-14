@@ -23,8 +23,8 @@ async fn main() {
     let discord = DiscordAPI::default().await;
 
     if config.debug_config.clear_channel {
-        discord.delete_all_messages(config.teatro_channel_id).await;
-        discord.delete_all_messages(config.artes_channel_id).await;
+        discord.delete_all_messages(&config.teatro_channel_id).await;
+        discord.delete_all_messages(&config.artes_channel_id).await;
 
         if config.debug_config.exit_after_clearing {
             exit(0)
