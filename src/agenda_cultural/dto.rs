@@ -39,7 +39,7 @@ impl ResponseEvent {
             SingleOrVec::Single(subtitle) => subtitle,
             SingleOrVec::Vec(vec) => vec.concat(),
         };
-        let description = self.crawl_full_description().await;
+        let description = self.get_full_description().await;
 
         Event::new(
             self.title.rendered.to_string(),
@@ -85,7 +85,7 @@ impl ResponseEvent {
         REMOVE_YEAR.replace_all(date, "").to_string()
     }
 
-    async fn crawl_full_description(&self) -> String {
+    async fn get_full_description(&self) -> String {
         let full_page: Result<String, _> = reqwest::get(&self.link)
             .inspect_err(|err| warn!("Failed to get full page: {:?}", err))
             .and_then(|res: Response| {
@@ -99,23 +99,31 @@ impl ResponseEvent {
             return Self::clean_description(&self.description.concat());
         }
 
-        let page_html = Html::parse_fragment(full_page.unwrap().as_str());
-        let description = page_html
-            .select(&Selector::parse(".entry-container > p").unwrap())
-            .map(|p| p.inner_html().to_string())
-            .collect::<Vec<String>>()
-            .first()
-            .map(|v| v.to_owned())
-            .unwrap_or_else(|| {
-                let preview_description = self.description.concat();
-                warn!(
-                    "Not able to find description in page (using preview description: {})",
-                    preview_description
-                );
+        Self::extract_full_description(&full_page.unwrap()).unwrap_or_else(|| {
+            let preview_description = self.description.concat();
+            warn!(
+                "Not able to find description in page (using preview description: {})",
                 preview_description
-            });
+            );
+            preview_description
+        })
+    }
 
-        Self::clean_description(&description)
+    fn extract_full_description(full_page: &str) -> Option<String> {
+        let page_html = Html::parse_fragment(full_page);
+
+        let description_elements = page_html
+            .select(&Selector::parse(".entry-container > p:not([class])").unwrap())
+            .map(|p| p.inner_html().to_string())
+            .collect::<Vec<String>>();
+
+        if description_elements.is_empty() {
+            return None;
+        }
+
+        let full_description = Self::clean_description(&description_elements.join("\n\n"));
+
+        Some(full_description)
     }
 
     fn clean_description(description: &str) -> String {
@@ -165,6 +173,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs::read_to_string;
 
     #[test_log::test]
     fn when_a_date_spans_only_one_year_should_get_only_day_and_month() {
@@ -306,5 +315,19 @@ mod tests {
         );
 
         assert!(dto.is_ok(), "{:?}", dto);
+    }
+
+    #[test_log::test]
+    fn should_extract_full_description() {
+        let event_page =
+            read_to_string("res/tests/event_page.html").expect("Could not get test resource");
+        let actual = ResponseEvent::extract_full_description(&event_page);
+
+        assert!(actual.is_some());
+        assert_eq!(
+            actual.unwrap(),
+            read_to_string("res/tests/event_full_description.txt")
+                .expect("Could not get test resource")
+        );
     }
 }
