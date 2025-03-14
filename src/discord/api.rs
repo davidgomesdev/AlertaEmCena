@@ -143,7 +143,13 @@ impl DiscordAPI {
         emoji_char: char,
         vote_emojis: &[EmojiConfig; 5],
     ) {
-        let users_that_voted: Vec<String> = self.get_user_votes(message, vote_emojis).await.iter().flatten().map(|user| user.id.to_string()).collect();
+        let users_that_voted: Vec<String> = self
+            .get_user_votes(message, vote_emojis)
+            .await
+            .iter()
+            .flatten()
+            .map(|user| user.id.to_string())
+            .collect();
         let saved_for_later_user_ids: Vec<String> = message
             .reaction_users(
                 &self.client.http,
@@ -164,14 +170,18 @@ impl DiscordAPI {
 
         if saved_for_later_user_ids.is_empty() && message.content.is_empty() {
             debug!("No users saved for later");
-            return
+            return;
         }
 
-        let mentions = saved_for_later_user_ids.iter().map(|user_id| format!("<@{}>", user_id)).collect::<Vec<String>>().join(" ");
+        let mentions = saved_for_later_user_ids
+            .iter()
+            .map(|user_id| format!("<@{}>", user_id))
+            .collect::<Vec<String>>()
+            .join(" ");
         let message_content = format!("Interessados: {}", mentions);
 
         if message_content == message.content {
-            return
+            return;
         }
 
         info!("Saved for later changed to '{}'", mentions);
@@ -179,8 +189,7 @@ impl DiscordAPI {
         message
             .edit(
                 &self.client.http,
-                EditMessage::new()
-                    .content(message_content),
+                EditMessage::new().content(message_content),
             )
             .await
             .expect("Failed to edit message!");
@@ -349,19 +358,30 @@ impl DiscordAPI {
     }
 
     #[instrument(skip(self, channel_id), fields(channel_id = %channel_id.to_string()))]
-    pub async fn delete_all_messages(&self, channel_id: ChannelId) {
+    pub async fn delete_all_messages(&self, channel_id: &ChannelId) {
         let messages = channel_id
             .messages_iter(&self.client.http)
             .try_collect::<Vec<Message>>()
             .await
             .expect("Failed to fetch messages");
 
+        self.delete_messages(channel_id, &messages).await;
+    }
+
+    async fn delete_messages(&self, channel_id: &ChannelId, messages: &Vec<Message>) {
         for chunk in messages.chunks(100) {
             debug!("Deleting {} messages", chunk.len());
-            channel_id
-                .delete_messages(&self.client.http, chunk)
-                .await
-                .expect("Failed to delete messages");
+            let deletion_result = channel_id.delete_messages(&self.client.http, chunk).await;
+
+            if let Err(err) = deletion_result {
+                warn!("Failed due to: '{}'. Retrying individually", err);
+
+                for msg in chunk {
+                    msg.delete(&self.client.http)
+                        .await
+                        .expect("Failed to delete one of the messages individually");
+                }
+            }
         }
     }
 }
