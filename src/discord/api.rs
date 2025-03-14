@@ -368,7 +368,7 @@ impl DiscordAPI {
         self.delete_messages(channel_id, &messages).await;
     }
 
-    async fn delete_messages(&self, channel_id: &ChannelId, messages: &Vec<Message>) {
+    async fn delete_messages(&self, channel_id: &ChannelId, messages: &[Message]) {
         for chunk in messages.chunks(100) {
             debug!("Deleting {} messages", chunk.len());
             let deletion_result = channel_id.delete_messages(&self.client.http, chunk).await;
