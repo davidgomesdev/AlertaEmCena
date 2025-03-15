@@ -12,6 +12,12 @@ use tracing::warn;
 use voca_rs::strip::strip_tags;
 
 #[derive(Debug, Deserialize)]
+pub struct SingleEventResponse {
+    #[serde(rename = "data")]
+    pub event: ResponseEvent,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct ResponseEvent {
     pub title: ResponseTitle,
     pub subtitle: SingleOrVec<String>,
@@ -30,6 +36,8 @@ pub struct ResponseEvent {
 
 lazy_static! {
     static ref REMOVE_YEAR: Regex = Regex::new(r" *?(\d{4}) *?").unwrap();
+    static ref EVENT_DESCRIPTION_SELECTOR: Selector =
+        Selector::parse(".entry-container > p:not([class])").unwrap();
 }
 
 impl ResponseEvent {
@@ -113,7 +121,7 @@ impl ResponseEvent {
         let page_html = Html::parse_fragment(full_page);
 
         let description_elements = page_html
-            .select(&Selector::parse(".entry-container > p:not([class])").unwrap())
+            .select(&EVENT_DESCRIPTION_SELECTOR)
             .map(|p| p.inner_html().to_string())
             .collect::<Vec<String>>();
 
