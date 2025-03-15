@@ -14,11 +14,11 @@ use voca_rs::strip::strip_tags;
 #[derive(Debug, Deserialize)]
 pub struct SingleEventResponse {
     #[serde(rename = "data")]
-    pub event: ResponseEvent,
+    pub event: EventResponse,
 }
 
 #[derive(Debug, Deserialize)]
-pub struct ResponseEvent {
+pub struct EventResponse {
     pub title: ResponseTitle,
     pub subtitle: SingleOrVec<String>,
     pub description: Vec<String>,
@@ -40,7 +40,7 @@ lazy_static! {
         Selector::parse(".entry-container > p:not([class])").unwrap();
 }
 
-impl ResponseEvent {
+impl EventResponse {
     #[tracing::instrument(skip(self), fields(self.link = %self.link))]
     pub async fn to_model(&self) -> Event {
         let subtitle = match self.subtitle.clone() {
@@ -185,35 +185,35 @@ mod tests {
 
     #[test_log::test]
     fn when_a_date_spans_only_one_year_should_get_only_day_and_month() {
-        let result = ResponseEvent::get_date_description("28 janeiro a 18 novembro 2025");
+        let result = EventResponse::get_date_description("28 janeiro a 18 novembro 2025");
 
         assert_eq!(result, "28 janeiro a 18 novembro");
     }
 
     #[test_log::test]
     fn when_a_date_spans_two_equal_years_should_get_both_day_month_and_year() {
-        let result = ResponseEvent::get_date_description("2 março 2025 a 1 setembro 2025");
+        let result = EventResponse::get_date_description("2 março 2025 a 1 setembro 2025");
 
         assert_eq!(result, "2 março a 1 setembro");
     }
 
     #[test_log::test]
     fn when_a_date_spans_two_different_years_should_get_both_day_month_and_year() {
-        let result = ResponseEvent::get_date_description("2 novembro 2024 a 1 junho 2025");
+        let result = EventResponse::get_date_description("2 novembro 2024 a 1 junho 2025");
 
         assert_eq!(result, "2 novembro 2024 a 1 junho 2025");
     }
 
     #[test_log::test]
     fn when_a_date_has_only_one_day_should_get_day_and_month() {
-        let result = ResponseEvent::get_date_description("3 maio 2025");
+        let result = EventResponse::get_date_description("3 maio 2025");
 
         assert_eq!(result, "3 maio");
     }
 
     #[test_log::test]
     fn should_deserialize_event_without_tags() {
-        let dto = serde_json::from_str::<Vec<ResponseEvent>>(
+        let dto = serde_json::from_str::<Vec<EventResponse>>(
             r##"
               [{
                 "id": 206968,
@@ -267,7 +267,7 @@ mod tests {
 
     #[test_log::test]
     fn should_deserialize_event_with_tags() {
-        let dto = serde_json::from_str::<Vec<ResponseEvent>>(
+        let dto = serde_json::from_str::<Vec<EventResponse>>(
             r##"
               [{
                 "id": 206968,
@@ -329,7 +329,7 @@ mod tests {
     fn should_extract_full_description() {
         let event_page =
             read_to_string("res/tests/event_page.html").expect("Could not get test resource");
-        let actual = ResponseEvent::extract_full_description(&event_page);
+        let actual = EventResponse::extract_full_description(&event_page);
 
         assert!(actual.is_some());
         assert_eq!(
