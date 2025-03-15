@@ -1,4 +1,4 @@
-use super::{dto::ResponseEvent, model::Event};
+use super::{dto::EventResponse, model::Event};
 use crate::agenda_cultural::dto::SingleEventResponse;
 use crate::agenda_cultural::model::Category;
 use futures::TryFutureExt;
@@ -68,7 +68,7 @@ impl AgendaCulturalAPI {
             .text()
             .await
             .expect("Received invalid response");
-        let parsed_response = serde_json::from_str::<Vec<ResponseEvent>>(&json_response);
+        let parsed_response = serde_json::from_str::<Vec<EventResponse>>(&json_response);
 
         match parsed_response {
             Ok(parsed_response) => {
