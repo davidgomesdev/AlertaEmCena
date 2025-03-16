@@ -135,16 +135,13 @@ impl DiscordAPI {
             .react(&self.client.http, ReactionType::from(emoji_char))
             .await;
 
-        match react_result {
-            Err(e) => {
-                let msg = &format!("Failed to add reaction {} to message", emoji_char);
-                error!(
-                    msg,
-                    error = %e
-                );
-            }
-            _ => {}
-        };
+        if let Err(e) = react_result {
+            let msg = &format!("Failed to add reaction {} to message", emoji_char);
+            error!(
+                msg,
+                error = %e
+            );
+        }
     }
 
     #[instrument(skip(self, message, vote_emojis), fields(event = %message.embeds.first().map(|embed| embed.url.clone().unwrap()).unwrap_or_default()
@@ -207,7 +204,9 @@ impl DiscordAPI {
             .expect("Failed to edit message!");
     }
 
-    pub async fn send_privately_users_vote(
+    #[instrument(skip(self, event_message, vote_emojis), fields(event = %event_message.embeds.first().map(|embed| embed.url.clone().unwrap()).unwrap_or_default()
+    ))]
+    pub async fn send_privately_users_review(
         &self,
         event_message: &Message,
         vote_emojis: &[EmojiConfig; 5],
@@ -232,26 +231,34 @@ impl DiscordAPI {
 
         for (vote, users) in users_votes.iter().enumerate() {
             for user in users.iter().filter(|user| !user.bot) {
-                match user.create_dm_channel(&self.client.http).await {
-                    Ok(dm) => {
-                        debug!("Found user {} with vote {}", user.id, vote + 1);
+                self.send_user_review(user, &event_url, event_embed.clone(), vote_emojis, vote)
+                    .await;
+            }
+        }
+    }
 
-                        if !self.is_event_sent_in_dm(&event_url, &dm).await {
-                            self.send_user_review_in_dm(
-                                &vote_emojis[vote],
-                                event_embed.clone(),
-                                &dm,
-                            )
-                            .await;
-                        }
-                    }
-                    Err(error) => {
-                        warn!(
-                            "Couldn't create DM channel for user '{}' due to: {}",
-                            user.name, error
-                        );
-                    }
+    async fn send_user_review(
+        &self,
+        user: &User,
+        event_url: &str,
+        event_embed: Embed,
+        vote_emojis: &[EmojiConfig; 5],
+        vote: usize,
+    ) {
+        match user.create_dm_channel(&self.client.http).await {
+            Ok(dm) => {
+                debug!("Found user {} with vote {}", user.id, vote + 1);
+
+                if !self.is_event_sent_in_dm(event_url, &dm).await {
+                    self.send_user_review_in_dm(&vote_emojis[vote], event_embed, &dm)
+                        .await;
                 }
+            }
+            Err(error) => {
+                warn!(
+                    "Couldn't create DM channel for user '{}' due to: {}",
+                    user.name, error
+                );
             }
         }
     }
