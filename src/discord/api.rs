@@ -128,14 +128,26 @@ impl DiscordAPI {
             .await
     }
 
+    #[instrument(skip(self, message), fields(event = %message.embeds.first().map(|embed| embed.url.clone().unwrap()).unwrap_or_default()
+    ))]
     pub async fn add_reaction_to_message(&self, message: &Message, emoji_char: char) {
-        message
+        let react_result = message
             .react(&self.client.http, ReactionType::from(emoji_char))
-            .await
-            .unwrap();
+            .await;
+
+        match react_result {
+            Err(e) => {
+                let msg = &format!("Failed to add reaction {} to message", emoji_char);
+                error!(
+                    msg,
+                    error = %e
+                );
+            }
+            _ => {}
+        };
     }
 
-    #[instrument(skip(self, message, emoji_char, vote_emojis), fields(event = %message.embeds.first().map(|embed| embed.url.clone().unwrap()).unwrap_or_default()
+    #[instrument(skip(self, message, vote_emojis), fields(event = %message.embeds.first().map(|embed| embed.url.clone().unwrap()).unwrap_or_default()
     ))]
     pub async fn tag_save_for_later_reactions(
         &self,
@@ -225,8 +237,12 @@ impl DiscordAPI {
                         debug!("Found user {} with vote {}", user.id, vote + 1);
 
                         if !self.is_event_sent_in_dm(&event_url, &dm).await {
-                            self.send_user_vote_in_dm(&vote_emojis[vote], &event_embed, &dm)
-                                .await;
+                            self.send_user_review_in_dm(
+                                &vote_emojis[vote],
+                                event_embed.clone(),
+                                &dm,
+                            )
+                            .await;
                         }
                     }
                     Err(error) => {
@@ -286,23 +302,75 @@ impl DiscordAPI {
     }
 
     #[instrument(skip(self, vote_emoji, event_embed, dm), fields(user_name = %dm.recipient.name.to_string(), vote = %vote_emoji.name.to_string(), event_url = event_embed.url))]
-    async fn send_user_vote_in_dm(
+    async fn send_user_review_in_dm(
         &self,
         vote_emoji: &EmojiConfig,
-        event_embed: &Embed,
+        event_embed: Embed,
         dm: &PrivateChannel,
     ) {
         info!("Sending vote");
 
-        let embed = CreateEmbed::from(event_embed.clone()).description(format!(
-            "{}\n**Voto:** {}",
-            event_embed.description.clone().unwrap(),
-            vote_emoji
-        ));
+        let comment = self.get_user_last_comment(dm).await;
+        let description = event_embed.description.clone();
+
+        let embed = Self::create_user_review_embed(vote_emoji, event_embed, &comment, description);
 
         dm.send_message(&self.client.http, CreateMessage::new().embed(embed))
             .await
             .expect("Failed to send message");
+
+        if let Some(comment) = comment {
+            self.add_reaction_to_message(&comment, '✅').await;
+        }
+    }
+
+    fn create_user_review_embed(
+        vote_emoji: &EmojiConfig,
+        event_embed: Embed,
+        comment: &Option<Message>,
+        description: Option<String>,
+    ) -> CreateEmbed {
+        match &comment {
+            None => CreateEmbed::from(event_embed).description(format!(
+                "{}\n**Voto:** {}",
+                description.unwrap(),
+                vote_emoji
+            )),
+            Some(comment) => CreateEmbed::from(event_embed).description(format!(
+                "{}\n**Voto:** {}\n**Comentários:** {}",
+                description.unwrap(),
+                vote_emoji,
+                comment.content
+            )),
+        }
+    }
+
+    #[instrument(skip(self, dm), fields(user_name = %dm.recipient.name.to_string()))]
+    async fn get_user_last_comment(&self, dm: &PrivateChannel) -> Option<Message> {
+        match dm.last_message_id {
+            Some(last_message_id) => {
+                self.client
+                    .http
+                    .get_message(dm.id, last_message_id)
+                    .await
+                    .inspect_err(|e| {
+                        warn!("Failed to get last message: {}", e);
+                    })
+                    .ok()
+                    .take_if(|msg| msg.author != *self.own_user)
+                    // a reply will be used in another feature
+                    .take_if(|msg| {
+                        let is_a_reply = msg.referenced_message.is_some();
+
+                        if is_a_reply {
+                            debug!("Ignoring last message since it's reply to another");
+                        }
+
+                        !is_a_reply
+                    })
+            }
+            None => None,
+        }
     }
 
     async fn is_event_sent_in_dm(&self, event_url: &str, dm: &PrivateChannel) -> bool {
