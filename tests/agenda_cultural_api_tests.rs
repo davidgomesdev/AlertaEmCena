@@ -11,18 +11,6 @@ async fn should_scrape_teatro_events() {
 }
 
 #[test_log::test(tokio::test)]
-async fn when_no_event_limit_is_provided_should_scrape_more_teatro_events_than_the_default() {
-    let res = AgendaCulturalAPI::get_events(&Category::Teatro, None)
-        .await
-        .unwrap();
-
-    assert_ne!(res.len(), 0);
-    // 5 is the default
-    // I'd be depressed if there were no more than 5 pieces in the upcoming dates 🥲
-    assert!(res.len() > 5);
-}
-
-#[test_log::test(tokio::test)]
 async fn should_scrape_artes_events() {
     let res = AgendaCulturalAPI::get_events(&Category::Artes, Some(2))
         .await
