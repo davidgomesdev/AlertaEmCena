@@ -34,7 +34,7 @@ pub struct AgendaCulturalAPI;
 impl AgendaCulturalAPI {
     /**
     Returns events in ascending order
-    * amount_per_page: -1 will retrieve everything
+    * amount_per_page: if not specified, will retrieve everything
     */
     #[tracing::instrument]
     pub async fn get_events(
@@ -56,7 +56,7 @@ impl AgendaCulturalAPI {
             .get(format!(
                 "{}?per_page={}&categories={}&type={}",
                 AGENDA_EVENTS_URL,
-                amount_per_page.unwrap_or(-1),
+                amount_per_page.unwrap_or(50000),
                 category.to_lowercase(),
                 EVENT_TYPE
             ))
@@ -72,6 +72,8 @@ impl AgendaCulturalAPI {
 
         match parsed_response {
             Ok(parsed_response) => {
+                info!("Fetched {} events", parsed_response.len());
+
                 let mut models = LinkedList::<Event>::new();
 
                 for response in parsed_response.iter() {
