@@ -14,6 +14,11 @@ pub async fn get_new_events(
     let events = AgendaCulturalAPI::get_events(category, event_limit)
         .await
         .unwrap();
+
+    if events.is_empty() {
+        panic!("No events found");
+    }
+
     let sent_events = discord.get_event_urls_sent(channel_id).await;
 
     info!("Channel has {} sent events", sent_events.len());
