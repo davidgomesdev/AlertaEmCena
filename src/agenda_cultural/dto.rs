@@ -36,8 +36,7 @@ pub struct EventResponse {
 
 lazy_static! {
     static ref REMOVE_YEAR: Regex = Regex::new(r" *?(\d{4}) *?").unwrap();
-    static ref EVENT_DESCRIPTION_SELECTOR: Selector =
-        Selector::parse(".entry-container > p:not([class])").unwrap();
+    static ref EVENT_DESCRIPTION_SELECTOR: Selector = Selector::parse(".entry-container > :not([class])").unwrap();
 }
 
 impl EventResponse {
@@ -47,7 +46,16 @@ impl EventResponse {
             SingleOrVec::Single(subtitle) => subtitle,
             SingleOrVec::Vec(vec) => vec.concat(),
         };
-        let description = self.get_full_description().await;
+        let description = self.get_full_description().await.unwrap_or_else(|| {
+            let preview_description = Self::clean_description(&self.description.concat());
+
+            warn!(
+                "Unable to get full description. Using only preview descrition ({})",
+                preview_description
+            );
+
+            preview_description
+        });
 
         Event::new(
             self.title.rendered.to_string(),
@@ -93,7 +101,7 @@ impl EventResponse {
         REMOVE_YEAR.replace_all(date, "").to_string()
     }
 
-    async fn get_full_description(&self) -> String {
+    async fn get_full_description(&self) -> Option<String> {
         let full_page: Result<String, _> = reqwest::get(&self.link)
             .inspect_err(|err| warn!("Failed to get full page: {:?}", err))
             .and_then(|res: Response| {
@@ -103,18 +111,10 @@ impl EventResponse {
             .await;
 
         if full_page.is_err() {
-            warn!("Using only preview description");
-            return Self::clean_description(&self.description.concat());
+            return None;
         }
 
-        Self::extract_full_description(&full_page.unwrap()).unwrap_or_else(|| {
-            let preview_description = Self::clean_description(self.description.concat());
-            warn!(
-                "Not able to find description in page (using preview description: {})",
-                preview_description
-            );
-            preview_description
-        })
+        Self::extract_full_description(&full_page.unwrap())
     }
 
     fn extract_full_description(full_page: &str) -> Option<String> {
@@ -126,6 +126,7 @@ impl EventResponse {
             .collect::<Vec<String>>();
 
         if description_elements.is_empty() {
+            warn!("Not able to find description in page",);
             return None;
         }
 
