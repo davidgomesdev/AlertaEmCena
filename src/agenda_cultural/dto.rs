@@ -108,7 +108,7 @@ impl EventResponse {
         }
 
         Self::extract_full_description(&full_page.unwrap()).unwrap_or_else(|| {
-            let preview_description = self.description.concat();
+            let preview_description = Self::clean_description(self.description.concat());
             warn!(
                 "Not able to find description in page (using preview description: {})",
                 preview_description
