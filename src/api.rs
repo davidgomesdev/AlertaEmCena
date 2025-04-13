@@ -24,6 +24,10 @@ pub async fn get_new_events(
     info!("Channel has {} sent events", sent_events.len());
 
     let unsent_events: Vec<Event> = events
+        .values()
+        .flatten()
+        .cloned()
+        .collect::<Vec<Event>>()
         .into_iter()
         .filter(|event| !sent_events.contains(&event.link))
         .collect();

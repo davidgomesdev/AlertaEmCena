@@ -1,6 +1,7 @@
 use super::{dto::EventResponse, model::Event};
 use crate::agenda_cultural::dto::SingleEventResponse;
 use crate::agenda_cultural::model::Category;
+use chrono::{Datelike, NaiveDate};
 use futures::TryFutureExt;
 use lazy_static::lazy_static;
 use reqwest::{Client, Response};
@@ -8,7 +9,7 @@ use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
 use reqwest_retry::policies::ExponentialBackoff;
 use reqwest_retry::RetryTransientMiddleware;
 use scraper::{Html, Selector};
-use std::collections::LinkedList;
+use std::collections::BTreeMap;
 use tracing::{error, info, warn};
 
 const AGENDA_EVENTS_URL: &str = "https://www.agendalx.pt/wp-json/agendalx/v1/events";
@@ -40,7 +41,7 @@ impl AgendaCulturalAPI {
     pub async fn get_events(
         category: &Category,
         amount_per_page: Option<i32>,
-    ) -> Result<LinkedList<Event>, APIError> {
+    ) -> Result<BTreeMap<NaiveDate, Vec<Event>>, APIError> {
         match amount_per_page {
             None => {
                 info!("Getting all events");
@@ -74,19 +75,34 @@ impl AgendaCulturalAPI {
             Ok(parsed_response) => {
                 info!("Fetched {} events", parsed_response.len());
 
-                let mut models = LinkedList::<Event>::new();
+                let events = Self::parse_events_by_date(parsed_response).await;
 
-                for response in parsed_response.iter() {
-                    models.push_back(response.to_model().await);
-                }
-
-                Ok(models)
+                Ok(events)
             }
             Err(e) => {
                 error!("Response parse failed: {:?}", e);
                 Err(APIError::InvalidResponse)
             }
         }
+    }
+
+    async fn parse_events_by_date(response: Vec<EventResponse>) -> BTreeMap<NaiveDate, Vec<Event>> {
+        let mut events_by_date: BTreeMap<NaiveDate, Vec<Event>> = BTreeMap::new();
+
+        for response in response {
+            let model = response.to_model().await;
+            let date =
+                NaiveDate::from_ymd_opt(response.start_date.year(), response.start_date.month(), 1)
+                    .unwrap();
+
+            if let Some(events) = events_by_date.get_mut(&date) {
+                events.push(model);
+            } else {
+                events_by_date.insert(date, Vec::from([model]));
+            }
+        }
+
+        events_by_date
     }
 
     /**
@@ -137,6 +153,76 @@ impl AgendaCulturalAPI {
             .expect("Fetched ID is not valid!");
 
         Self::get_event_by_id(id_element).await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::agenda_cultural::dto::ResponseTitle;
+    use serde_either::SingleOrVec;
+
+    #[test_log::test(tokio::test)]
+    async fn should_parse_event_by_date() {
+        let february = NaiveDate::from_ymd_opt(2025, 2, 1).unwrap();
+        let march = NaiveDate::from_ymd_opt(2025, 3, 1).unwrap();
+        let events_per_month = AgendaCulturalAPI::parse_events_by_date(Vec::from([
+            EventResponse {
+                title: ResponseTitle {
+                    rendered: "Como sobreviver a um acontecimento".to_string(),
+                },
+                subtitle: SingleOrVec::Single("".to_string()),
+                description: vec![],
+                featured_media_large: "".to_string(),
+                link: "".to_string(),
+                string_dates: "".to_string(),
+                string_times: "".to_string(),
+                start_date: march,
+                venue: Default::default(),
+                tags: Default::default(),
+            },
+            EventResponse {
+                title: ResponseTitle {
+                    rendered: "Sonho de uma noite de verão".to_string(),
+                },
+                subtitle: SingleOrVec::Single("".to_string()),
+                description: vec![],
+                featured_media_large: "".to_string(),
+                link: "".to_string(),
+                string_dates: "".to_string(),
+                string_times: "".to_string(),
+                start_date: february,
+                venue: Default::default(),
+                tags: Default::default(),
+            },
+            EventResponse {
+                title: ResponseTitle {
+                    rendered: "Mães".to_string(),
+                },
+                subtitle: SingleOrVec::Single("".to_string()),
+                description: vec![],
+                featured_media_large: "".to_string(),
+                link: "".to_string(),
+                string_dates: "".to_string(),
+                string_times: "".to_string(),
+                start_date: march,
+                venue: Default::default(),
+                tags: Default::default(),
+            },
+        ]))
+        .await;
+
+        assert_eq!(events_per_month.len(), 2);
+
+        let february_events = events_per_month.get(&february).unwrap();
+        let march_events = events_per_month.get(&march).unwrap();
+
+        assert_eq!(february_events.len(), 1);
+        assert_eq!(march_events.len(), 2);
+
+        assert_eq!(february_events[0].title, "Sonho de uma noite de verão");
+        assert_eq!(march_events[0].title, "Como sobreviver a um acontecimento");
+        assert_eq!(march_events[1].title, "Mães");
     }
 }
 

@@ -1,5 +1,5 @@
 #[allow(dead_code)]
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Event {
     pub title: String,
     pub details: EventDetails,
@@ -30,7 +30,7 @@ impl Event {
 }
 
 #[allow(dead_code)]
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct EventDetails {
     pub subtitle: String,
     pub description: String,
@@ -49,7 +49,7 @@ impl EventDetails {
 
 /// Portuguese Schedule information
 #[allow(dead_code)]
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Schedule {
     pub dates: String,
     pub times: String,
