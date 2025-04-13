@@ -84,7 +84,9 @@ async fn handle_reaction_features(
             .tag_save_for_later_reactions(&mut message, *SAVE_FOR_LATER_EMOJI, vote_emojis)
             .await;
 
-        discord.send_privately_users_review(&message, vote_emojis).await;
+        discord
+            .send_privately_users_review(&message, vote_emojis)
+            .await;
     }
 }
 

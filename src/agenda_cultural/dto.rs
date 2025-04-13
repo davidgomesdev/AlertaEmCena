@@ -1,4 +1,5 @@
 use super::model::{Event, EventDetails, Schedule};
+use chrono::NaiveDate;
 use futures::TryFutureExt;
 use lazy_static::lazy_static;
 use regex::Regex;
@@ -17,6 +18,7 @@ pub struct SingleEventResponse {
     pub event: EventResponse,
 }
 
+// Note: some String fields need the custom deserializer due to being optional
 #[derive(Debug, Deserialize)]
 pub struct EventResponse {
     pub title: ResponseTitle,
@@ -28,6 +30,8 @@ pub struct EventResponse {
     pub link: String,
     pub string_dates: String,
     pub string_times: String,
+    #[serde(rename = "StartDate", deserialize_with = "deserialize_date")]
+    pub start_date: NaiveDate,
     #[serde(deserialize_with = "deserialize_btreemap")]
     pub venue: BTreeMap<String, ResponseVenue>,
     #[serde(deserialize_with = "deserialize_btreemap", rename = "tags_name_list")]
@@ -36,7 +40,8 @@ pub struct EventResponse {
 
 lazy_static! {
     static ref REMOVE_YEAR: Regex = Regex::new(r" *?(\d{4}) *?").unwrap();
-    static ref EVENT_DESCRIPTION_SELECTOR: Selector = Selector::parse(".entry-container > :not([class])").unwrap();
+    static ref EVENT_DESCRIPTION_SELECTOR: Selector =
+        Selector::parse(".entry-container > :not([class])").unwrap();
 }
 
 impl EventResponse {
@@ -179,6 +184,18 @@ where
     })
 }
 
+fn deserialize_date<'de, D>(d: D) -> Result<NaiveDate, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    Ok(match Value::deserialize(d)? {
+        Value::String(s) => {
+            NaiveDate::parse_from_str(&*s, "%Y-%m-%d").map_err(de::Error::custom)?
+        }
+        _unknown => panic!("Found an unknown data type: {}", _unknown),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -264,6 +281,19 @@ mod tests {
         );
 
         assert!(dto.is_ok(), "{:?}", dto);
+
+        let dto = dto.unwrap();
+
+        assert_eq!(dto.len(), 1);
+
+        let dto = dto.get(0).unwrap();
+
+        assert_eq!(
+            dto.start_date,
+            NaiveDate::from_ymd_opt(2025, 2, 22).unwrap(),
+            "{:?}",
+            dto
+        );
     }
 
     #[test_log::test]
@@ -324,6 +354,19 @@ mod tests {
         );
 
         assert!(dto.is_ok(), "{:?}", dto);
+
+        let dto = dto.unwrap();
+
+        assert_eq!(dto.len(), 1);
+
+        let dto = dto.get(0).unwrap();
+
+        assert_eq!(
+            dto.start_date,
+            NaiveDate::from_ymd_opt(2025, 2, 22).unwrap(),
+            "{:?}",
+            dto
+        );
     }
 
     #[test_log::test]
@@ -342,8 +385,8 @@ mod tests {
 
     #[test_log::test]
     fn should_extract_full_description_with_italic_description() {
-        let event_page =
-            read_to_string("res/tests/event_page_with_italic_description.html").expect("Could not get test resource");
+        let event_page = read_to_string("res/tests/event_page_with_italic_description.html")
+            .expect("Could not get test resource");
         let actual = EventResponse::extract_full_description(&event_page);
 
         assert!(actual.is_some());

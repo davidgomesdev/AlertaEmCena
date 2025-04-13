@@ -93,7 +93,10 @@ async fn when_an_event_is_deleted_should_not_read_afterwards() {
 
     let message = api.send_event(*channel_id, unique_event).await;
 
-    message.delete(&api.client.http).await.expect("Failed deleting event sent");
+    message
+        .delete(&api.client.http)
+        .await
+        .expect("Failed deleting event sent");
 
     let is_event_sent = api.get_event_urls_sent(*channel_id).await.contains(&link);
 
@@ -107,13 +110,17 @@ async fn when_someone_reacts_with_save_later_should_add_that_person_to_message()
     let api = build_api().await;
 
     let mut message = api.send_event(*channel_id, unique_event).await;
-    api.add_reaction_to_message(&message, *SAVE_FOR_LATER_EMOJI).await;
+    api.add_reaction_to_message(&message, *SAVE_FOR_LATER_EMOJI)
+        .await;
 
     let tester_api = build_tester_api().await;
     let voting_emojis = load_voting_emojis_config("VOTING_EMOJIS");
 
-    tester_api.add_reaction_to_message(&message, *SAVE_FOR_LATER_EMOJI).await;
-    api.tag_save_for_later_reactions(&mut message, *SAVE_FOR_LATER_EMOJI, &voting_emojis).await;
+    tester_api
+        .add_reaction_to_message(&message, *SAVE_FOR_LATER_EMOJI)
+        .await;
+    api.tag_save_for_later_reactions(&mut message, *SAVE_FOR_LATER_EMOJI, &voting_emojis)
+        .await;
 
     let message = tester_api
         .get_messages(*channel_id)
@@ -134,42 +141,51 @@ async fn when_someone_reacts_with_save_later_should_add_that_person_to_message()
         })
         .unwrap();
 
-    let saved_later = message
-        .content;
+    let saved_later = message.content;
 
-    assert!(saved_later
-        .contains(tester_api.own_user.id.to_string().as_str()));
-    assert!(!saved_later
-        .contains(api.own_user.id.to_string().as_str()));
+    assert!(saved_later.contains(tester_api.own_user.id.to_string().as_str()));
+    assert!(!saved_later.contains(api.own_user.id.to_string().as_str()));
 }
 
 #[test_log::test(tokio::test)]
-async fn when_someone_removes_save_for_later_react_should_add_remove_that_person_from_the_message() {
+async fn when_someone_removes_save_for_later_react_should_add_remove_that_person_from_the_message()
+{
     let (_, unique_event) = generate_random_event();
 
     let api = build_api().await;
 
     let mut message = api.send_event(*channel_id, unique_event).await;
-    api.add_reaction_to_message(&message, *SAVE_FOR_LATER_EMOJI).await;
+    api.add_reaction_to_message(&message, *SAVE_FOR_LATER_EMOJI)
+        .await;
 
     let tester_api = build_tester_api().await;
     let voting_emojis = load_voting_emojis_config("VOTING_EMOJIS");
 
-    tester_api.add_reaction_to_message(&message, *SAVE_FOR_LATER_EMOJI).await;
-    api.tag_save_for_later_reactions(&mut message, *SAVE_FOR_LATER_EMOJI, &voting_emojis).await;
-    
-    message.delete_reaction_emoji(&tester_api.client.http, *SAVE_FOR_LATER_EMOJI).await.unwrap();
-    api.tag_save_for_later_reactions(&mut message, *SAVE_FOR_LATER_EMOJI, &voting_emojis).await;
+    tester_api
+        .add_reaction_to_message(&message, *SAVE_FOR_LATER_EMOJI)
+        .await;
+    api.tag_save_for_later_reactions(&mut message, *SAVE_FOR_LATER_EMOJI, &voting_emojis)
+        .await;
 
-    let message = tester_api.client.http.clone().get_message(*channel_id, message.id).await.unwrap();
+    message
+        .delete_reaction_emoji(&tester_api.client.http, *SAVE_FOR_LATER_EMOJI)
+        .await
+        .unwrap();
+    api.tag_save_for_later_reactions(&mut message, *SAVE_FOR_LATER_EMOJI, &voting_emojis)
+        .await;
 
-    let saved_later = message
-        .content;
+    let message = tester_api
+        .client
+        .http
+        .clone()
+        .get_message(*channel_id, message.id)
+        .await
+        .unwrap();
 
-    assert!(!saved_later
-        .contains(tester_api.own_user.id.to_string().as_str()));
-    assert!(!saved_later
-        .contains(api.own_user.id.to_string().as_str()));
+    let saved_later = message.content;
+
+    assert!(!saved_later.contains(tester_api.own_user.id.to_string().as_str()));
+    assert!(!saved_later.contains(api.own_user.id.to_string().as_str()));
 }
 
 #[test_log::test(tokio::test)]
@@ -185,16 +201,20 @@ async fn should_send_the_voted_event_message_via_dm_only_once() {
 
     let tester_api = build_tester_api().await;
 
-    tester_api.add_custom_reaction(&message, &voting_emojis[3]).await;
+    tester_api
+        .add_custom_reaction(&message, &voting_emojis[3])
+        .await;
 
     // allows manual testing - bots can't vote on each other
     tokio::time::sleep(Duration::from_secs(5)).await;
 
-    api.send_privately_users_review(&message, &voting_emojis).await;
+    api.send_privately_users_review(&message, &voting_emojis)
+        .await;
 }
 
 #[test_log::test(tokio::test)]
-async fn when_someone_saves_for_later_reacts_with_a_three_vote_should_remove_the_user_from_interested() {
+async fn when_someone_saves_for_later_reacts_with_a_three_vote_should_remove_the_user_from_interested(
+) {
     let (_, unique_event) = generate_random_event();
 
     let api = build_api().await;
@@ -206,19 +226,26 @@ async fn when_someone_saves_for_later_reacts_with_a_three_vote_should_remove_the
 
     let tester_api = build_tester_api().await;
 
-    tester_api.add_reaction_to_message(&message, *SAVE_FOR_LATER_EMOJI).await;
-    tester_api.add_custom_reaction(&message, &voting_emojis[2]).await;
+    tester_api
+        .add_reaction_to_message(&message, *SAVE_FOR_LATER_EMOJI)
+        .await;
+    tester_api
+        .add_custom_reaction(&message, &voting_emojis[2])
+        .await;
 
-    api.tag_save_for_later_reactions(&mut message, *SAVE_FOR_LATER_EMOJI, &voting_emojis).await;
+    api.tag_save_for_later_reactions(&mut message, *SAVE_FOR_LATER_EMOJI, &voting_emojis)
+        .await;
 
-    let message = tester_api.client.http.get_message(*channel_id, message.id).await.expect("Failed getting sent message");
-    let saved_later = message
-        .content;
+    let message = tester_api
+        .client
+        .http
+        .get_message(*channel_id, message.id)
+        .await
+        .expect("Failed getting sent message");
+    let saved_later = message.content;
 
-    assert!(!saved_later
-        .contains(tester_api.own_user.id.to_string().as_str()));
-    assert!(!saved_later
-        .contains(api.own_user.id.to_string().as_str()));
+    assert!(!saved_later.contains(tester_api.own_user.id.to_string().as_str()));
+    assert!(!saved_later.contains(api.own_user.id.to_string().as_str()));
 }
 
 fn generate_random_event() -> (String, Event) {
