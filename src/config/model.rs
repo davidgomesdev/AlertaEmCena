@@ -1,5 +1,5 @@
-use std::fmt::Display;
 use serenity::all::ChannelId;
+use std::fmt::Display;
 
 #[derive(Debug)]
 pub struct Config {

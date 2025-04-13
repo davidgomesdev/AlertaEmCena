@@ -31,3 +31,4 @@ serenity = "0.12.4"
 
 # Utils
 uuid = { version = "1.11.1", features = ["v4"] }
+chrono = "0.4.40"
