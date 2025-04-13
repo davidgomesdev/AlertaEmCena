@@ -18,7 +18,7 @@ async fn main() {
 
     let config = load_config();
 
-    debug!("Loaded {:#?}", config);
+    debug!("Loaded {:?}", config);
 
     let discord = DiscordAPI::default().await;
 

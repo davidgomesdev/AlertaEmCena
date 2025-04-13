@@ -50,7 +50,7 @@ impl EventResponse {
             let preview_description = Self::clean_description(&self.description.concat());
 
             warn!(
-                "Unable to get full description. Using only preview descrition ({})",
+                "Unable to get full description. Using only preview description ({})",
                 preview_description
             );
 
@@ -335,7 +335,21 @@ mod tests {
         assert!(actual.is_some());
         assert_eq!(
             actual.unwrap(),
-            read_to_string("res/tests/event_full_description.txt")
+            read_to_string("res/tests/event_page_full_description.txt")
+                .expect("Could not get test resource")
+        );
+    }
+
+    #[test_log::test]
+    fn should_extract_full_description_with_italic_description() {
+        let event_page =
+            read_to_string("res/tests/event_page_with_italic_description.html").expect("Could not get test resource");
+        let actual = EventResponse::extract_full_description(&event_page);
+
+        assert!(actual.is_some());
+        assert_eq!(
+            actual.unwrap(),
+            read_to_string("res/tests/event_page_full_description_with_italic_description.txt")
                 .expect("Could not get test resource")
         );
     }
