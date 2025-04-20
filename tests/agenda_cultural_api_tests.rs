@@ -4,7 +4,7 @@ mod agenda_cultural {
 
     #[test_log::test(tokio::test)]
     async fn should_scrape_teatro_events() {
-        let res: Vec<Event> = AgendaCulturalAPI::get_events(&Category::Teatro, Some(5))
+        let res: Vec<Event> = AgendaCulturalAPI::get_events_by_month(&Category::Teatro, Some(5))
             .await
             .unwrap()
             .into_values()
@@ -16,7 +16,7 @@ mod agenda_cultural {
 
     #[test_log::test(tokio::test)]
     async fn should_scrape_artes_events() {
-        let res: Vec<Event> = AgendaCulturalAPI::get_events(&Category::Artes, Some(2))
+        let res: Vec<Event> = AgendaCulturalAPI::get_events_by_month(&Category::Artes, Some(2))
             .await
             .unwrap()
             .into_values()

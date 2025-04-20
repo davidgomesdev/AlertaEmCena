@@ -38,7 +38,7 @@ impl AgendaCulturalAPI {
     * amount_per_page: if not specified, will retrieve everything
     */
     #[tracing::instrument]
-    pub async fn get_events(
+    pub async fn get_events_by_month(
         category: &Category,
         amount_per_page: Option<i32>,
     ) -> Result<BTreeMap<NaiveDate, Vec<Event>>, APIError> {

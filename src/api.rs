@@ -2,8 +2,9 @@ use crate::agenda_cultural::api::AgendaCulturalAPI;
 use crate::agenda_cultural::model::{Category, Event};
 use crate::config::model::EmojiConfig;
 use crate::discord::api::{month_to_portuguese_display, DiscordAPI, EventsThread};
-use serenity::all::{ChannelId, Message, PartialGuild};
+use serenity::all::{ChannelId, GuildChannel, Message, PartialGuild};
 use std::collections::BTreeMap;
+use chrono::NaiveDate;
 use tracing::info;
 
 pub async fn get_new_events_by_thread(
@@ -13,7 +14,7 @@ pub async fn get_new_events_by_thread(
     channel_id: ChannelId,
     event_limit: Option<i32>,
 ) -> BTreeMap<EventsThread, Vec<Event>> {
-    let events = AgendaCulturalAPI::get_events(category, event_limit)
+    let events = AgendaCulturalAPI::get_events_by_month(category, event_limit)
         .await
         .unwrap();
 
@@ -21,29 +22,15 @@ pub async fn get_new_events_by_thread(
         panic!("No events found");
     }
 
-    let mut threads = BTreeMap::new();
-    let mut sent_events = Vec::new();
-
     let active_threads = discord.get_channel_active_threads(guild, channel_id).await;
 
-    for date in events.keys() {
-        let thread = discord
-            .get_date_thread(&active_threads, channel_id, *date)
-            .await;
-
-        let mut thread_events = discord.get_event_urls_sent(thread.thread_id).await;
-
-        sent_events.append(&mut thread_events);
-
-        info!("Thread '{}' has {} sent events", month_to_portuguese_display(*date), sent_events.len());
-
-        threads.insert(date, thread);
-    }
+    let threads = get_threads_by_month(discord, channel_id, &events, &active_threads).await;
+    let sent_events = get_sent_events(discord, &threads).await;
 
     threads
         .into_iter()
         .map(|(date, thread)| {
-            let unsent_events = events[date]
+            let unsent_events = events[&date]
                 .iter()
                 .filter(|&e| !sent_events.contains(&e.link))
                 .cloned()
@@ -52,6 +39,33 @@ pub async fn get_new_events_by_thread(
             (thread, unsent_events)
         })
         .collect()
+}
+
+async fn get_sent_events(discord: &DiscordAPI, threads: &BTreeMap<NaiveDate, EventsThread>) -> Vec<String> {
+    let mut sent_events = Vec::new();
+
+    for (date, thread) in threads.iter() {
+        let mut thread_events = discord.get_event_urls_sent(thread.thread_id).await;
+
+        sent_events.append(&mut thread_events);
+
+        info!("Thread '{}' has {} sent events", month_to_portuguese_display(date), sent_events.len());
+    }
+    sent_events
+}
+
+async fn get_threads_by_month(discord: &DiscordAPI, channel_id: ChannelId, events: &BTreeMap<NaiveDate, Vec<Event>>, active_threads: &Vec<GuildChannel>) -> BTreeMap<NaiveDate, EventsThread> {
+    let mut threads = BTreeMap::new();
+
+    for date in events.keys() {
+        let thread = discord
+            .get_date_thread(&active_threads, channel_id, *date)
+            .await;
+
+        threads.insert(date.clone(), thread);
+    }
+
+    threads
 }
 
 pub async fn add_feature_reactions(
