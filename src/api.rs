@@ -38,7 +38,9 @@ pub async fn get_new_events_by_thread(
         .into_iter()
         .map(|(date, thread)| {
             let unsent_events = events[date]
-                .iter().filter(|&e| !sent_events.contains(&e.link)).cloned()
+                .iter()
+                .filter(|&e| !sent_events.contains(&e.link))
+                .cloned()
                 .collect();
 
             (thread, unsent_events)

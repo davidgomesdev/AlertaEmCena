@@ -1,5 +1,4 @@
 use crate::helpers::*;
-use alertaemcena::agenda_cultural::model::*;
 use alertaemcena::api::add_feature_reactions;
 use alertaemcena::config::env_loader::load_voting_emojis_config;
 use chrono::NaiveDate;
@@ -21,47 +20,14 @@ lazy_static! {
 
 #[test_log::test(tokio::test)]
 async fn should_send_event() {
-    build_api()
-        .await
-        .send_event(*channel_id, Event {
-            title: "O Auto da Barca do Inferno".to_string(),
-            details: EventDetails {
-                subtitle: "Uma peça de Gil Vicente".to_string(),
-                description: "Uma comédia dramática que reflete sobre os vícios humanos e as escolhas morais.".to_string(),
-                image_url: "https://www.culturalkids.pt/wp-content/uploads/2021/04/Auto-01_1.jpg".to_string(),
-            },
-            link: "https://example.com/events/barca_inferno".to_string(),
-            occurring_at: Schedule {
-                dates: "21 setembro 2024 a 23 fevereiro 2025".to_string(),
-                times: "qui: 21h; sex: 21h; sáb: 21h; dom: 17h".to_string(),
-            },
-            venue: "Teatro Nacional D. Maria II, Lisboa".to_string(),
-            tags: vec!["festival".to_string()],
-        })
-        .await;
+    let api = build_api().await;
+    send_random_event(&api).await;
 }
 
 #[test_log::test(tokio::test)]
 async fn should_add_reaction_to_event() {
     let api = build_api_without_cache().await;
-
-    let message = api
-        .send_event(*channel_id, Event {
-            title: "O Auto da Barca do Inferno".to_string(),
-            details: EventDetails {
-                subtitle: "Uma peça de Gil Vicente".to_string(),
-                description: "Uma comédia dramática que reflete sobre os vícios humanos e as escolhas morais.".to_string(),
-                image_url: "https://www.culturalkids.pt/wp-content/uploads/2021/04/Auto-01_1.jpg".to_string(),
-            },
-            link: "https://example.com/events/barca_inferno".to_string(),
-            occurring_at: Schedule {
-                dates: "21 setembro 2024 a 23 fevereiro 2025".to_string(),
-                times: "qui: 21h; sex: 21h; sáb: 21h; dom: 17h".to_string(),
-            },
-            venue: "Teatro Nacional D. Maria II, Lisboa".to_string(),
-            tags: vec!["festival".to_string()],
-        })
-        .await;
+    let (_, _, message) = send_random_event(&api).await;
 
     api.add_reaction_to_message(&message, *SAVE_FOR_LATER_EMOJI)
         .await;
@@ -69,47 +35,49 @@ async fn should_add_reaction_to_event() {
 
 #[test_log::test(tokio::test)]
 async fn should_read_events() {
-    build_api().await.get_event_urls_sent(*channel_id).await;
+    let api = build_api().await;
+    let (thread_id, link, _) = send_random_event(&api).await;
+
+    let size = api
+        .get_event_urls_sent(thread_id)
+        .await
+        .into_iter()
+        .filter(|msg| *msg == link)
+        .collect::<Vec<String>>()
+        .len();
+
+    assert_eq!(size, 1);
 }
 
 #[test_log::test(tokio::test)]
 async fn should_read_event_sent() {
-    let (link, unique_event) = generate_random_event();
-
     let api = build_api().await;
+    let (thread_id, link, _) = send_random_event(&api).await;
 
-    api.send_event(*channel_id, unique_event).await;
-
-    let is_event_sent = api.get_event_urls_sent(*channel_id).await.contains(&link);
+    let is_event_sent = api.get_event_urls_sent(thread_id).await.contains(&link);
 
     assert!(is_event_sent);
 }
 
 #[test_log::test(tokio::test)]
 async fn when_an_event_is_deleted_should_not_read_afterwards() {
-    let (link, unique_event) = generate_random_event();
-
     let api = build_api().await;
-
-    let message = api.send_event(*channel_id, unique_event).await;
+    let (thread_id, link, message) = send_random_event(&api).await;
 
     message
         .delete(&api.client.http)
         .await
         .expect("Failed deleting event sent");
 
-    let is_event_sent = api.get_event_urls_sent(*channel_id).await.contains(&link);
+    let is_event_sent = api.get_event_urls_sent(thread_id).await.contains(&link);
 
     assert!(!is_event_sent);
 }
 
 #[test_log::test(tokio::test)]
 async fn when_someone_reacts_with_save_later_should_add_that_person_to_message() {
-    let (link, unique_event) = generate_random_event();
-
     let api = build_api().await;
-
-    let mut message = api.send_event(*channel_id, unique_event).await;
+    let (thread_id, link, mut message) = send_random_event(&api).await;
     api.add_reaction_to_message(&message, *SAVE_FOR_LATER_EMOJI)
         .await;
 
@@ -123,7 +91,7 @@ async fn when_someone_reacts_with_save_later_should_add_that_person_to_message()
         .await;
 
     let message = tester_api
-        .get_messages(*channel_id)
+        .get_messages(thread_id)
         .await
         .into_iter()
         .find(|msg| {
@@ -150,11 +118,9 @@ async fn when_someone_reacts_with_save_later_should_add_that_person_to_message()
 #[test_log::test(tokio::test)]
 async fn when_someone_removes_save_for_later_react_should_add_remove_that_person_from_the_message()
 {
-    let (_, unique_event) = generate_random_event();
-
     let api = build_api().await;
+    let (thread_id, _, mut message) = send_random_event(&api).await;
 
-    let mut message = api.send_event(*channel_id, unique_event).await;
     api.add_reaction_to_message(&message, *SAVE_FOR_LATER_EMOJI)
         .await;
 
@@ -178,7 +144,7 @@ async fn when_someone_removes_save_for_later_react_should_add_remove_that_person
         .client
         .http
         .clone()
-        .get_message(*channel_id, message.id)
+        .get_message(thread_id, message.id)
         .await
         .unwrap();
 
@@ -190,11 +156,9 @@ async fn when_someone_removes_save_for_later_react_should_add_remove_that_person
 
 #[test_log::test(tokio::test)]
 async fn should_send_the_voted_event_message_via_dm_only_once() {
-    let (_, unique_event) = generate_random_event();
-
     let api = build_api().await;
+    let (_, _, message) = send_random_event(&api).await;
 
-    let message = api.send_event(*channel_id, unique_event).await;
     let voting_emojis = load_voting_emojis_config("VOTING_EMOJIS");
 
     add_feature_reactions(&api, &message, &voting_emojis, *SAVE_FOR_LATER_EMOJI).await;
@@ -215,11 +179,8 @@ async fn should_send_the_voted_event_message_via_dm_only_once() {
 #[test_log::test(tokio::test)]
 async fn when_someone_saves_for_later_reacts_with_a_three_vote_should_remove_the_user_from_interested(
 ) {
-    let (_, unique_event) = generate_random_event();
-
     let api = build_api().await;
-
-    let mut message = api.send_event(*channel_id, unique_event).await;
+    let (thread_id, _, mut message) = send_random_event(&api).await;
     let voting_emojis = load_voting_emojis_config("VOTING_EMOJIS");
 
     add_feature_reactions(&api, &message, &voting_emojis, *SAVE_FOR_LATER_EMOJI).await;
@@ -239,7 +200,7 @@ async fn when_someone_saves_for_later_reacts_with_a_three_vote_should_remove_the
     let message = tester_api
         .client
         .http
-        .get_message(*channel_id, message.id)
+        .get_message(thread_id, message.id)
         .await
         .expect("Failed getting sent message");
     let saved_later = message.content;
@@ -251,38 +212,36 @@ async fn when_someone_saves_for_later_reacts_with_a_three_vote_should_remove_the
 #[test_log::test(tokio::test)]
 async fn should_create_date_thread() {
     let api = build_api().await;
+    let (_, _, message) = send_random_event(&api).await;
+    let thread_date = NaiveDate::from_ymd_opt(1999, 3, 12).unwrap();
+    let thread_name = "Março 1999";
 
-    api.delete_all_messages(&channel_id).await;
-
-    api.get_date_thread(*channel_id, NaiveDate::from_ymd_opt(2024, 3, 12).unwrap())
-        .await;
+    api.get_date_thread(*channel_id, thread_date).await;
 
     let mut thread = channel_id
-        .messages(api.client.http, GetMessages::default())
+        .messages(api.client.http, GetMessages::new().after(message.id))
         .await
         .unwrap()
         .into_iter()
         .filter_map(|msg| msg.thread)
-        .filter(|thread| thread.name == "Março 2024")
+        .filter(|thread| thread.name == thread_name)
         .collect::<Vec<GuildChannel>>();
 
     assert_eq!(thread.len(), 1);
-    assert_eq!(thread.pop().unwrap().name, "Março 2024");
+    assert_eq!(thread.pop().unwrap().name, thread_name);
 }
 
 #[test_log::test(tokio::test)]
 async fn should_not_create_duplicate_date_thread() {
-    let api = build_api().await;
+    let api = build_api_without_cache().await;
+    let (_, _, message) = send_random_event(&api).await;
 
-    api.delete_all_messages(&channel_id).await;
+    let thread_date = NaiveDate::from_ymd_opt(2003, 3, 12).unwrap();
+    let thread_name = "Março 1999";
 
-    let date_thread = api
-        .get_date_thread(*channel_id, NaiveDate::from_ymd_opt(2024, 3, 12).unwrap())
-        .await;
+    let date_thread = api.get_date_thread(*channel_id, thread_date).await;
 
-    let second_date_thread = api
-        .get_date_thread(*channel_id, NaiveDate::from_ymd_opt(2024, 3, 12).unwrap())
-        .await;
+    let second_date_thread = api.get_date_thread(*channel_id, thread_date).await;
 
     assert_eq!(
         date_thread.channel_id.get(),
@@ -290,30 +249,48 @@ async fn should_not_create_duplicate_date_thread() {
     );
 
     let mut thread = channel_id
-        .messages(api.client.http, GetMessages::default())
+        .messages(api.client.http, GetMessages::new().after(message.id))
         .await
         .unwrap()
         .into_iter()
         .filter_map(|msg| msg.thread)
-        .filter(|thread| thread.name == "Março 2024")
+        .filter(|thread| thread.name == thread_name)
         .collect::<Vec<GuildChannel>>();
 
     assert_eq!(thread.len(), 1);
-    assert_eq!(thread.pop().unwrap().name, "Março 2024");
+    assert_eq!(thread.pop().unwrap().name, thread_name);
 }
 
 mod helpers {
-    use crate::{tester_token, token};
+    use crate::{channel_id, tester_token, token};
     use alertaemcena::agenda_cultural::model::{Event, EventDetails, Schedule};
     use alertaemcena::discord::api::DiscordAPI;
+    use chrono::NaiveDate;
+    use lazy_static::lazy_static;
+    use serenity::all::{ChannelId, Message};
+    use tokio::sync::OnceCell;
     use uuid::Uuid;
 
-    pub fn generate_random_event() -> (String, Event) {
+    lazy_static! {
+        static ref INIT: OnceCell<i32> = OnceCell::new();
+    }
+
+    pub async fn send_random_event(api: &DiscordAPI) -> (ChannelId, String, Message) {
+        let (link, unique_event, date) = generate_random_event();
+        let thread = api.get_date_thread(*channel_id, date).await;
+
+        let message = api.send_event(thread.channel_id, unique_event).await;
+
+        (thread.channel_id, link, message)
+    }
+
+    pub fn generate_random_event() -> (String, Event, NaiveDate) {
         let test_id = Uuid::new_v4();
         let link = format!(
             "https://example.com/events/barca_inferno?test_id={}",
             test_id
         );
+        let date = NaiveDate::from_ymd_opt(2024, 9, 1).unwrap();
         let unique_event = Event {
             title: "O Auto da Barca do Inferno".to_string(),
             details: EventDetails {
@@ -332,15 +309,33 @@ mod helpers {
             venue: "Teatro Nacional D. Maria II, Lisboa".to_string(),
             tags: vec!["festival".to_string()],
         };
-        (link, unique_event)
+        (link, unique_event, date)
     }
 
     pub async fn build_api() -> DiscordAPI {
-        DiscordAPI::new(&token, true).await
+        let api = DiscordAPI::new(&token, true).await;
+
+        let _ = INIT
+            .get_or_init(|| async {
+                api.delete_all_messages(&channel_id).await;
+                0
+            })
+            .await;
+
+        api
     }
 
     pub async fn build_api_without_cache() -> DiscordAPI {
-        DiscordAPI::new(&token, false).await
+        let api = DiscordAPI::new(&token, false).await;
+
+        let _ = INIT
+            .get_or_init(|| async {
+                api.delete_all_messages(&channel_id).await;
+                0
+            })
+            .await;
+
+        api
     }
 
     pub async fn build_tester_api() -> DiscordAPI {
