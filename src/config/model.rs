@@ -14,6 +14,7 @@ pub struct DebugConfig {
     pub clear_channel: bool,
     pub exit_after_clearing: bool,
     pub skip_sending: bool,
+    pub skip_feature_reactions: bool,
     pub event_limit: Option<i32>,
 }
 

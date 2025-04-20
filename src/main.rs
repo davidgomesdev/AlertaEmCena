@@ -46,7 +46,9 @@ async fn run(config: &Config, discord: &DiscordAPI, category: Category, channel_
     let guild = discord.get_guild(channel_id).await;
     let threads = discord.get_channel_active_threads(&guild, channel_id).await;
 
-    handle_reaction_features(discord, threads, &config.voting_emojis).await;
+    if !config.debug_config.skip_feature_reactions {
+        handle_reaction_features(discord, threads, &config.voting_emojis).await;
+    }
 
     let new_events = get_new_events_by_thread(
         discord,
