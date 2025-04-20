@@ -44,7 +44,7 @@ async fn should_scrape_the_specified_event_by_public_url() {
         "qua: 19h; qui: 19h; sex: 21h; sáb: 21h; dom: 16h"
     );
     assert_eq!(event.venue, "Teatro Aberto");
-    assert_eq!(event.tags.is_empty(), true);
+    assert!(event.tags.is_empty());
 }
 
 #[test_log::test(tokio::test)]
@@ -68,7 +68,7 @@ async fn should_scrape_the_specified_event_by_id() {
         "qua: 19h; qui: 19h; sex: 21h; sáb: 21h; dom: 16h"
     );
     assert_eq!(event.venue, "Teatro Aberto");
-    assert_eq!(event.tags.is_empty(), true);
+    assert!(event.tags.is_empty());
 }
 
 #[test_log::test(tokio::test)]
@@ -97,6 +97,6 @@ async fn should_scrape_the_specified_event_with_an_italic_description_by_public_
     );
     assert_eq!(event.venue, "Sala Estúdio Valentim de Barros");
     assert_eq!(event.tags.len(), 2);
-    assert_eq!(event.tags.get(0).unwrap(), "performance");
+    assert_eq!(event.tags.first().unwrap(), "performance");
     assert_eq!(event.tags.get(1).unwrap(), "Sónia Baptista");
 }

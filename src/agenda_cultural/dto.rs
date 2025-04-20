@@ -190,7 +190,7 @@ where
 {
     Ok(match Value::deserialize(d)? {
         Value::String(s) => {
-            NaiveDate::parse_from_str(&*s, "%Y-%m-%d").map_err(de::Error::custom)?
+            NaiveDate::parse_from_str(&s, "%Y-%m-%d").map_err(de::Error::custom)?
         }
         _unknown => panic!("Found an unknown data type: {}", _unknown),
     })
@@ -286,7 +286,7 @@ mod tests {
 
         assert_eq!(dto.len(), 1);
 
-        let dto = dto.get(0).unwrap();
+        let dto = dto.first().unwrap();
 
         assert_eq!(
             dto.start_date,
@@ -359,7 +359,7 @@ mod tests {
 
         assert_eq!(dto.len(), 1);
 
-        let dto = dto.get(0).unwrap();
+        let dto = dto.first().unwrap();
 
         assert_eq!(
             dto.start_date,
