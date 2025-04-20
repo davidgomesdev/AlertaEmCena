@@ -48,7 +48,7 @@ jobs:
       run: cargo build -q
 
     - name: 🧪 - Run tests
-      run: cargo test -q
+      run: cargo test -q --no-fail-fast
       env:
         DISCORD_CHANNEL_ID: ${{ secrets.DISCORD_CHANNEL_ID }}
         DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
