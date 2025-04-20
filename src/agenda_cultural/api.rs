@@ -52,24 +52,7 @@ impl AgendaCulturalAPI {
         }
 
         let category: &'static str = category.into();
-
-        let json_response = REST_CLIENT
-            .get(format!(
-                "{}?per_page={}&categories={}&type={}",
-                AGENDA_EVENTS_URL,
-                amount_per_page.unwrap_or(50000),
-                category.to_lowercase(),
-                EVENT_TYPE
-            ))
-            .send()
-            .await
-            .expect("Error sending request")
-            .error_for_status()
-            .expect("Request failed")
-            .text()
-            .await
-            .expect("Received invalid response");
-        let parsed_response = serde_json::from_str::<Vec<EventResponse>>(&json_response);
+        let parsed_response = Self::get_events_by_category(amount_per_page, category).await;
 
         match parsed_response {
             Ok(parsed_response) => {
@@ -153,6 +136,31 @@ impl AgendaCulturalAPI {
             .expect("Fetched ID is not valid!");
 
         Self::get_event_by_id(id_element).await
+    }
+
+    #[tracing::instrument]
+    async fn get_events_by_category(
+        amount_per_page: Option<i32>,
+        category: &str,
+    ) -> serde_json::Result<Vec<EventResponse>> {
+        let json_response = REST_CLIENT
+            .get(format!(
+                "{}?per_page={}&categories={}&type={}",
+                AGENDA_EVENTS_URL,
+                amount_per_page.unwrap_or(50000),
+                category.to_lowercase(),
+                EVENT_TYPE
+            ))
+            .send()
+            .await
+            .expect("Error sending request")
+            .error_for_status()
+            .expect("Request failed")
+            .text()
+            .await
+            .expect("Received invalid response");
+
+        serde_json::from_str::<Vec<EventResponse>>(&json_response)
     }
 }
 

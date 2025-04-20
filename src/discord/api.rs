@@ -4,14 +4,16 @@ use chrono::{Datelike, NaiveDate};
 use futures::{StreamExt, TryStreamExt};
 use lazy_static::lazy_static;
 use regex::Regex;
-use serenity::all::{ChannelType, Colour, CreateEmbedAuthor, CreateThread, CurrentUser, Embed, GatewayIntents, GetMessages, Guild, GuildChannel, Message, MessageId, PrivateChannel, ReactionType, User};
+use serenity::all::{
+    ChannelType, Colour, CreateEmbedAuthor, CreateThread, CurrentUser, Embed, GatewayIntents,
+    GetMessages, Message, MessageId, PrivateChannel, ReactionType, User,
+};
 use serenity::builder::{CreateEmbed, CreateMessage, EditMessage};
 use serenity::cache::Settings;
 use serenity::model::id::ChannelId;
 use serenity::prelude::SerenityError;
 use serenity::Client;
 use std::env;
-use serenity::all::Route::{ChannelMessageThreads, ChannelThreads};
 use tracing::{debug, error, info, instrument, warn};
 
 const AUTHOR_NAME: &str = "AlertaEmCena";
@@ -437,16 +439,17 @@ impl DiscordAPI {
         let year = date.year();
         let month_in_portuguese = month_to_portuguese_display(date);
 
-        for message in channel_id.messages(&self.client.http, GetMessages::default()).await.unwrap() {
-            match message.thread {
-                Some(thread) => {
-                    if thread.name == format!("{month_in_portuguese} {year}") {
-                        return EventsThread::new(thread.id)
-                    }
+        for message in channel_id
+            .messages(&self.client.http, GetMessages::default())
+            .await
+            .unwrap()
+        {
+            if let Some(thread) = message.thread {
+                if thread.name == format!("{month_in_portuguese} {year}") {
+                    return EventsThread::new(thread.id);
                 }
-                None => {}
             }
-        };
+        }
 
         EventsThread::new(
             channel_id

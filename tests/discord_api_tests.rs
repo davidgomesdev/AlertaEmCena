@@ -262,8 +262,7 @@ async fn should_create_date_thread() {
         .await
         .unwrap()
         .into_iter()
-        .map(|msg| msg.thread)
-        .flatten()
+        .filter_map(|msg| msg.thread)
         .filter(|thread| thread.name == "Março 2024")
         .collect::<Vec<GuildChannel>>();
 
@@ -277,21 +276,25 @@ async fn should_not_create_duplicate_date_thread() {
 
     api.delete_all_messages(&channel_id).await;
 
-    let date_thread = api.get_date_thread(*channel_id, NaiveDate::from_ymd_opt(2024, 3, 12).unwrap())
+    let date_thread = api
+        .get_date_thread(*channel_id, NaiveDate::from_ymd_opt(2024, 3, 12).unwrap())
         .await;
 
-    let second_date_thread = api.get_date_thread(*channel_id, NaiveDate::from_ymd_opt(2024, 3, 12).unwrap())
+    let second_date_thread = api
+        .get_date_thread(*channel_id, NaiveDate::from_ymd_opt(2024, 3, 12).unwrap())
         .await;
 
-    assert_eq!(date_thread.channel_id.get(), second_date_thread.channel_id.get());
+    assert_eq!(
+        date_thread.channel_id.get(),
+        second_date_thread.channel_id.get()
+    );
 
     let mut thread = channel_id
         .messages(api.client.http, GetMessages::default())
         .await
         .unwrap()
         .into_iter()
-        .map(|msg| msg.thread)
-        .flatten()
+        .filter_map(|msg| msg.thread)
         .filter(|thread| thread.name == "Março 2024")
         .collect::<Vec<GuildChannel>>();
 
