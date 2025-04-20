@@ -31,8 +31,8 @@ mod agenda_cultural {
         let event: Event = AgendaCulturalAPI::get_event_by_public_url(
             "https://www.agendalx.pt/events/event/nora-helmer/",
         )
-            .await
-            .unwrap();
+        .await
+        .unwrap();
 
         assert_eq!(event.title, "Nora Helmer");
         assert_eq!(event.details.description, "A história de Nora Helmer, protagonista de Casa de Bonecas, peça de Henrik Ibsen, torna-se o ponto de partida para um debate aceso sobre a família, o casamento e o lugar da mulher na sociedade. Ler mais.");
@@ -83,8 +83,8 @@ mod agenda_cultural {
         let event: Event = AgendaCulturalAPI::get_event_by_public_url(
             "https://www.agendalx.pt/events/event/king-size-2/",
         )
-            .await
-            .unwrap();
+        .await
+        .unwrap();
 
         assert_eq!(event.title, "King Size");
         assert_eq!(event.details.description, "King Size analisa como se constrói a masculinidade, para ressignificar as relações entre natureza, género e sexo. Focando figuras que incorporam os mitos masculinos, bem como as suas revisões paródicas, esta criação encena um jogo de desidentificação que resiste às pressões de binarismo sexual, na sociedade e na arte.\n\n.\n\nUma obra que confronta os dispositivos de criação e dramaturgia de performances drag contemporâneas com os códigos rígidos de representação de género, na dança e no teatro tradicionais, e interroga essas representações, esbatendo as diferenças entre o que é natural e o que é construção cultural ou cénica.");

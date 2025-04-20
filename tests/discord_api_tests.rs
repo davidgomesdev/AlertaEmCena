@@ -4,7 +4,7 @@ mod discord {
     use chrono::NaiveDate;
     use helpers::*;
     use lazy_static::lazy_static;
-    use serenity::all::{ChannelId, GetMessages, GuildChannel};
+    use serenity::all::{ChannelId, GuildChannel};
     use std::env;
     use std::time::Duration;
 
@@ -211,55 +211,63 @@ mod discord {
     }
 
     #[test_log::test(tokio::test)]
+    async fn should_get_threads_of_only_the_specified_channel() {
+        let api = build_api().await;
+        let guild = api.get_guild(*channel_id).await;
+        let active_threads = api.get_channel_active_threads(&guild, *channel_id).await;
+
+        assert!(
+            active_threads
+                .iter()
+                .all(|thread| thread.parent_id == Some(*channel_id)),
+            "Didn't get threads of only the specified channel!"
+        );
+    }
+
+    #[test_log::test(tokio::test)]
     async fn should_create_date_thread() {
         let api = build_api().await;
-        let (_, _, message) = send_random_event(&api).await;
         let thread_date = NaiveDate::from_ymd_opt(2021, 3, 12).unwrap();
         let thread_name = "Março 2021";
 
-        api.get_date_thread(*channel_id, thread_date).await;
+        let guild = api.get_guild(*channel_id).await;
+        let active_threads = api.get_channel_active_threads(&guild, *channel_id).await;
 
-        let mut thread = channel_id
-            .messages(api.client.http, GetMessages::new().after(message.id))
-            .await
-            .unwrap()
-            .into_iter()
-            .filter_map(|msg| msg.thread)
-            .filter(|thread| thread.name == thread_name)
-            .collect::<Vec<GuildChannel>>();
+        api.get_date_thread(&active_threads, *channel_id, thread_date)
+            .await;
 
-        assert_eq!(thread.len(), 1);
-        assert_eq!(thread.pop().unwrap().name, thread_name);
+        let mut threads = api.get_channel_active_threads(&guild, *channel_id).await.into_iter().filter(|thread| thread.name == thread_name).collect::<Vec<GuildChannel>>();
+
+        assert_eq!(threads.len(), 1);
+        assert_eq!(threads.pop().unwrap().name, thread_name);
     }
 
     #[test_log::test(tokio::test)]
     async fn should_not_create_duplicate_date_thread() {
         let api = build_api_without_cache().await;
-        let (_, _, message) = send_random_event(&api).await;
-
+        let guild = api.get_guild(*channel_id).await;
         let thread_date = NaiveDate::from_ymd_opt(1999, 3, 12).unwrap();
         let thread_name = "Março 1999";
 
-        let date_thread = api.get_date_thread(*channel_id, thread_date).await;
+        let active_threads = api.get_channel_active_threads(&guild, *channel_id).await;
+        let date_thread = api
+            .get_date_thread(&active_threads, *channel_id, thread_date)
+            .await;
 
-        let second_date_thread = api.get_date_thread(*channel_id, thread_date).await;
+        let active_threads = api.get_channel_active_threads(&guild, *channel_id).await;
+        let second_date_thread = api
+            .get_date_thread(&active_threads, *channel_id, thread_date)
+            .await;
 
         assert_eq!(
             date_thread.channel_id.get(),
             second_date_thread.channel_id.get()
         );
 
-        let mut thread = channel_id
-            .messages(api.client.http, GetMessages::new().after(message.id))
-            .await
-            .unwrap()
-            .into_iter()
-            .filter_map(|msg| msg.thread)
-            .filter(|thread| thread.name == thread_name)
-            .collect::<Vec<GuildChannel>>();
+        let mut threads = api.get_channel_active_threads(&guild, *channel_id).await.into_iter().filter(|thread| thread.name == thread_name).collect::<Vec<GuildChannel>>();
 
-        assert_eq!(thread.len(), 1);
-        assert_eq!(thread.pop().unwrap().name, thread_name);
+        assert_eq!(threads.len(), 1);
+        assert_eq!(threads.pop().unwrap().name, thread_name);
     }
 
     mod helpers {
@@ -278,8 +286,11 @@ mod discord {
 
         pub async fn send_random_event(api: &DiscordAPI) -> (ChannelId, String, Message) {
             let (link, unique_event, date) = generate_random_event();
-            let thread = api.get_date_thread(*channel_id, date).await;
-
+            let guild = api.get_guild(*channel_id).await;
+            let active_threads = api.get_channel_active_threads(&guild, *channel_id).await;
+            let thread = api
+                .get_date_thread(&active_threads, *channel_id, date)
+                .await;
             let message = api.send_event(thread.channel_id, unique_event).await;
 
             (thread.channel_id, link, message)
@@ -316,12 +327,7 @@ mod discord {
         pub async fn build_api() -> DiscordAPI {
             let api = DiscordAPI::new(&token, true).await;
 
-            let _ = INIT
-                .get_or_init(|| async {
-                    api.delete_all_messages(&channel_id).await;
-                    0
-                })
-                .await;
+            cleanup_channel(&api).await;
 
             api
         }
@@ -329,14 +335,28 @@ mod discord {
         pub async fn build_api_without_cache() -> DiscordAPI {
             let api = DiscordAPI::new(&token, false).await;
 
+            cleanup_channel(&api).await;
+
+            api
+        }
+
+        async fn cleanup_channel(api: &DiscordAPI) {
             let _ = INIT
                 .get_or_init(|| async {
+                    let guild = &api.get_guild(*channel_id).await;
+
+                    for thread in api.get_channel_active_threads(guild, *channel_id).await {
+                        thread
+                            .delete(&api.client.http)
+                            .await
+                            .expect("Failed to delete thread!");
+                    }
+
                     api.delete_all_messages(&channel_id).await;
+
                     0
                 })
                 .await;
-
-            api
         }
 
         pub async fn build_tester_api() -> DiscordAPI {
