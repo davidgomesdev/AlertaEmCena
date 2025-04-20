@@ -1,21 +1,35 @@
 use crate::agenda_cultural::model::Event;
 use crate::config::model::EmojiConfig;
+use chrono::{Datelike, NaiveDate};
 use futures::{StreamExt, TryStreamExt};
 use lazy_static::lazy_static;
 use regex::Regex;
-use serenity::all::{
-    Colour, CreateEmbedAuthor, CurrentUser, Embed, GatewayIntents, GetMessages, Message, MessageId,
-    PrivateChannel, ReactionType, User,
-};
+use serenity::all::{ChannelType, Colour, CreateEmbedAuthor, CreateThread, CurrentUser, Embed, GatewayIntents, GetMessages, Guild, GuildChannel, Message, MessageId, PrivateChannel, ReactionType, User};
 use serenity::builder::{CreateEmbed, CreateMessage, EditMessage};
 use serenity::cache::Settings;
 use serenity::model::id::ChannelId;
 use serenity::prelude::SerenityError;
 use serenity::Client;
 use std::env;
+use serenity::all::Route::{ChannelMessageThreads, ChannelThreads};
 use tracing::{debug, error, info, instrument, warn};
 
 const AUTHOR_NAME: &str = "AlertaEmCena";
+
+const PORTUGUESE_MONTHS: [&str; 12] = [
+    "Janeiro",
+    "Fevereiro",
+    "Março",
+    "Abril",
+    "Maio",
+    "Junho",
+    "Julho",
+    "Agosto",
+    "Setembro",
+    "Outubro",
+    "Novembro",
+    "Dezembro",
+];
 
 lazy_static! {
     static ref USER_MENTION_REGEX: Regex =
@@ -419,6 +433,34 @@ impl DiscordAPI {
         is_found
     }
 
+    pub async fn get_date_thread(&self, channel_id: ChannelId, date: NaiveDate) -> EventsThread {
+        let year = date.year();
+        let month_in_portuguese = month_to_portuguese_display(date);
+
+        for message in channel_id.messages(&self.client.http, GetMessages::default()).await.unwrap() {
+            match message.thread {
+                Some(thread) => {
+                    if thread.name == format!("{month_in_portuguese} {year}") {
+                        return EventsThread::new(thread.id)
+                    }
+                }
+                None => {}
+            }
+        };
+
+        EventsThread::new(
+            channel_id
+                .create_thread(
+                    &self.client.http,
+                    CreateThread::new(format!("{month_in_portuguese} {year}"))
+                        .kind(ChannelType::PublicThread),
+                )
+                .await
+                .unwrap()
+                .id,
+        )
+    }
+
     pub async fn get_event_urls_sent(&self, channel_id: ChannelId) -> Vec<String> {
         channel_id
             .messages_iter(&self.client.http)
@@ -458,5 +500,20 @@ impl DiscordAPI {
                 }
             }
         }
+    }
+}
+
+pub fn month_to_portuguese_display(date: NaiveDate) -> String {
+    PORTUGUESE_MONTHS[(date.month() - 1) as usize].to_string()
+}
+
+#[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
+pub struct EventsThread {
+    pub channel_id: ChannelId,
+}
+
+impl EventsThread {
+    pub fn new(channel_id: ChannelId) -> EventsThread {
+        EventsThread { channel_id }
     }
 }

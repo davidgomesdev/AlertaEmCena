@@ -1,5 +1,5 @@
 use super::model::{Event, EventDetails, Schedule};
-use chrono::{Datelike, NaiveDate};
+use chrono::NaiveDate;
 use futures::TryFutureExt;
 use lazy_static::lazy_static;
 use regex::Regex;
@@ -11,25 +11,6 @@ use serde_json::Value;
 use std::collections::{BTreeMap, HashSet};
 use tracing::warn;
 use voca_rs::strip::strip_tags;
-
-const PORTUGUESE_MONTHS: [&str; 12] = [
-    "Janeiro",
-    "Fevereiro",
-    "Março",
-    "Abril",
-    "Maio",
-    "Junho",
-    "Julho",
-    "Agosto",
-    "Setembro",
-    "Outubro",
-    "Novembro",
-    "Dezembro",
-];
-
-fn to_portuguese_month_and_year_display(date: NaiveDate) -> String {
-    PORTUGUESE_MONTHS[(date.month() - 1) as usize].to_string()
-}
 
 #[derive(Debug, Deserialize)]
 pub struct SingleEventResponse {

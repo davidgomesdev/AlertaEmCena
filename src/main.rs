@@ -100,7 +100,8 @@ async fn send_new_events(
 ) {
     info!("Sending new events");
 
-    let new_events = get_new_events(discord, category, channel_id, debug_config.event_limit).await;
+    let new_events =
+        get_new_events_by_thread(discord, category, channel_id, debug_config.event_limit).await;
 
     if new_events.is_empty() {
         info!("No new events to send");
@@ -114,9 +115,11 @@ async fn send_new_events(
         return;
     }
 
-    for event in new_events {
-        let message = discord.send_event(channel_id, event).await;
+    for (thread, events) in new_events {
+        for event in events {
+            let message = discord.send_event(thread.channel_id, event).await;
 
-        add_feature_reactions(discord, &message, emojis, *SAVE_FOR_LATER_EMOJI).await;
+            add_feature_reactions(discord, &message, emojis, *SAVE_FOR_LATER_EMOJI).await;
+        }
     }
 }
