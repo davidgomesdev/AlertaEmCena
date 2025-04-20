@@ -11,6 +11,7 @@ pub fn load_config() -> Config {
         clear_channel: load_bool_config("DEBUG_CLEAR_CHANNEL", false),
         exit_after_clearing: load_bool_config("DEBUG_EXIT_AFTER_CLEARING", false),
         skip_sending: load_bool_config("DEBUG_SKIP_SENDING", false),
+        skip_feature_reactions: load_bool_config("DEBUG_SKIP_FEATURE_REACTIONS", false),
         event_limit: load_i32_config("DEBUG_EVENT_LIMIT"),
     };
 
