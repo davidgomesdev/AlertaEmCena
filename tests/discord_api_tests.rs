@@ -1,12 +1,12 @@
+use crate::helpers::*;
 use alertaemcena::agenda_cultural::model::*;
 use alertaemcena::api::add_feature_reactions;
 use alertaemcena::config::env_loader::load_voting_emojis_config;
-use alertaemcena::discord::api::DiscordAPI;
+use chrono::NaiveDate;
 use lazy_static::lazy_static;
-use serenity::all::ChannelId;
+use serenity::all::{ChannelId, GetMessages, GuildChannel};
 use std::env;
 use std::time::Duration;
-use uuid::Uuid;
 
 lazy_static! {
     static ref token: String = env::var("DISCORD_TOKEN").expect("DISCORD_TOKEN not set");
@@ -248,41 +248,99 @@ async fn when_someone_saves_for_later_reacts_with_a_three_vote_should_remove_the
     assert!(!saved_later.contains(api.own_user.id.to_string().as_str()));
 }
 
-fn generate_random_event() -> (String, Event) {
-    let test_id = Uuid::new_v4();
-    let link = format!(
-        "https://example.com/events/barca_inferno?test_id={}",
-        test_id
-    );
-    let unique_event = Event {
-        title: "O Auto da Barca do Inferno".to_string(),
-        details: EventDetails {
-            subtitle: "Uma peça de Gil Vicente".to_string(),
-            description:
+#[test_log::test(tokio::test)]
+async fn should_create_date_thread() {
+    let api = build_api().await;
+
+    api.delete_all_messages(&channel_id).await;
+
+    api.get_date_thread(*channel_id, NaiveDate::from_ymd_opt(2024, 3, 12).unwrap())
+        .await;
+
+    let mut thread = channel_id
+        .messages(api.client.http, GetMessages::default())
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|msg| msg.thread)
+        .flatten()
+        .filter(|thread| thread.name == "Março 2024")
+        .collect::<Vec<GuildChannel>>();
+
+    assert_eq!(thread.len(), 1);
+    assert_eq!(thread.pop().unwrap().name, "Março 2024");
+}
+
+#[test_log::test(tokio::test)]
+async fn should_not_create_duplicate_date_thread() {
+    let api = build_api().await;
+
+    api.delete_all_messages(&channel_id).await;
+
+    let date_thread = api.get_date_thread(*channel_id, NaiveDate::from_ymd_opt(2024, 3, 12).unwrap())
+        .await;
+
+    let second_date_thread = api.get_date_thread(*channel_id, NaiveDate::from_ymd_opt(2024, 3, 12).unwrap())
+        .await;
+
+    assert_eq!(date_thread.channel_id.get(), second_date_thread.channel_id.get());
+
+    let mut thread = channel_id
+        .messages(api.client.http, GetMessages::default())
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|msg| msg.thread)
+        .flatten()
+        .filter(|thread| thread.name == "Março 2024")
+        .collect::<Vec<GuildChannel>>();
+
+    assert_eq!(thread.len(), 1);
+    assert_eq!(thread.pop().unwrap().name, "Março 2024");
+}
+
+mod helpers {
+    use crate::{tester_token, token};
+    use alertaemcena::agenda_cultural::model::{Event, EventDetails, Schedule};
+    use alertaemcena::discord::api::DiscordAPI;
+    use uuid::Uuid;
+
+    pub fn generate_random_event() -> (String, Event) {
+        let test_id = Uuid::new_v4();
+        let link = format!(
+            "https://example.com/events/barca_inferno?test_id={}",
+            test_id
+        );
+        let unique_event = Event {
+            title: "O Auto da Barca do Inferno".to_string(),
+            details: EventDetails {
+                subtitle: "Uma peça de Gil Vicente".to_string(),
+                description:
                 "Uma comédia dramática que reflete sobre os vícios humanos e as escolhas morais."
                     .to_string(),
-            image_url: "https://www.culturalkids.pt/wp-content/uploads/2021/04/Auto-01_1.jpg"
-                .to_string(),
-        },
-        link: link.to_string(),
-        occurring_at: Schedule {
-            dates: "21 setembro 2024 a 23 fevereiro 2025".to_string(),
-            times: "qui: 21h; sex: 21h; sáb: 21h; dom: 17h".to_string(),
-        },
-        venue: "Teatro Nacional D. Maria II, Lisboa".to_string(),
-        tags: vec!["festival".to_string()],
-    };
-    (link, unique_event)
-}
+                image_url: "https://www.culturalkids.pt/wp-content/uploads/2021/04/Auto-01_1.jpg"
+                    .to_string(),
+            },
+            link: link.to_string(),
+            occurring_at: Schedule {
+                dates: "21 setembro 2024 a 23 fevereiro 2025".to_string(),
+                times: "qui: 21h; sex: 21h; sáb: 21h; dom: 17h".to_string(),
+            },
+            venue: "Teatro Nacional D. Maria II, Lisboa".to_string(),
+            tags: vec!["festival".to_string()],
+        };
+        (link, unique_event)
+    }
 
-async fn build_api() -> DiscordAPI {
-    DiscordAPI::new(&token, true).await
-}
+    pub async fn build_api() -> DiscordAPI {
+        DiscordAPI::new(&token, true).await
+    }
 
-async fn build_api_without_cache() -> DiscordAPI {
-    DiscordAPI::new(&token, false).await
-}
+    pub async fn build_api_without_cache() -> DiscordAPI {
+        DiscordAPI::new(&token, false).await
+    }
 
-async fn build_tester_api() -> DiscordAPI {
-    DiscordAPI::new(&tester_token, false).await
+    pub async fn build_tester_api() -> DiscordAPI {
+        DiscordAPI::new(&tester_token, false).await
+    }
 }
