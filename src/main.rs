@@ -1,10 +1,11 @@
-use alertaemcena::agenda_cultural::model::Category;
+use alertaemcena::agenda_cultural::model::{Category, Event};
 use alertaemcena::api::*;
 use alertaemcena::config::env_loader::load_config;
 use alertaemcena::config::model::{Config, DebugConfig, EmojiConfig};
-use alertaemcena::discord::api::DiscordAPI;
+use alertaemcena::discord::api::{DiscordAPI, EventsThread};
 use lazy_static::lazy_static;
-use serenity::all::ChannelId;
+use serenity::all::{ChannelId, GuildChannel};
+use std::collections::BTreeMap;
 use std::process::exit;
 use tracing::{debug, info, instrument, warn};
 
@@ -42,66 +43,75 @@ async fn main() {
 }
 
 async fn run(config: &Config, discord: &DiscordAPI, category: Category, channel_id: ChannelId) {
-    handle_reaction_features(discord, channel_id, &config.voting_emojis).await;
+    let guild = discord.get_guild(channel_id).await;
+    let threads = discord.get_channel_active_threads(&guild, channel_id).await;
+
+    handle_reaction_features(discord, threads, &config.voting_emojis).await;
+
+    let new_events = get_new_events_by_thread(
+        discord,
+        &guild,
+        &category,
+        channel_id,
+        config.debug_config.event_limit,
+    )
+    .await;
 
     send_new_events(
         discord,
-        &category,
-        channel_id,
+        new_events,
         &config.debug_config,
         &config.voting_emojis,
     )
     .await;
 }
 
-#[instrument(skip(discord, channel_id, vote_emojis), fields(channel_id = %channel_id.to_string()))]
+#[instrument(skip(discord, threads, vote_emojis))]
 async fn handle_reaction_features(
     discord: &DiscordAPI,
-    channel_id: ChannelId,
+    threads: Vec<GuildChannel>,
     vote_emojis: &[EmojiConfig; 5],
 ) {
-    let messages = discord
-        .get_all_messages(channel_id)
-        .await
-        .expect("Failed to get messages");
+    for thread in threads {
+        let messages = discord
+            .get_all_messages(thread.id)
+            .await
+            .expect("Failed to get messages");
 
-    info!("Tagging save for later and sending votes in DM");
+        info!("Tagging save for later and sending votes in DM");
 
-    for mut message in messages {
-        if message.embeds.is_empty() {
-            warn!(
-                "Found message without embed (id={}; content={})",
-                message.id, message.content
-            );
-            continue;
+        for mut message in messages {
+            if message.embeds.is_empty() {
+                warn!(
+                    "Found message without embed (id={}; content={})",
+                    message.id, message.content
+                );
+                continue;
+            }
+
+            discord
+                .add_reaction_to_message(&message, *SAVE_FOR_LATER_EMOJI)
+                .await;
+
+            discord
+                .tag_save_for_later_reactions(&mut message, *SAVE_FOR_LATER_EMOJI, vote_emojis)
+                .await;
+
+            discord
+                .send_privately_users_review(&message, vote_emojis)
+                .await;
         }
-
-        discord
-            .add_reaction_to_message(&message, *SAVE_FOR_LATER_EMOJI)
-            .await;
-
-        discord
-            .tag_save_for_later_reactions(&mut message, *SAVE_FOR_LATER_EMOJI, vote_emojis)
-            .await;
-
-        discord
-            .send_privately_users_review(&message, vote_emojis)
-            .await;
     }
 }
 
-#[instrument(skip(discord, channel_id, emojis), fields(channel_id = %channel_id.to_string()))]
+#[instrument(skip(discord, new_events, emojis, debug_config), fields(new_events_count = %new_events.len()))]
 async fn send_new_events(
     discord: &DiscordAPI,
-    category: &Category,
-    channel_id: ChannelId,
+    new_events: BTreeMap<EventsThread, Vec<Event>>,
     debug_config: &DebugConfig,
     emojis: &[EmojiConfig; 5],
 ) {
     info!("Sending new events");
-
-    let new_events =
-        get_new_events_by_thread(discord, category, channel_id, debug_config.event_limit).await;
 
     if new_events.is_empty() {
         info!("No new events to send");
@@ -117,7 +127,7 @@ async fn send_new_events(
 
     for (thread, events) in new_events {
         for event in events {
-            let message = discord.send_event(thread.channel_id, event).await;
+            let message = discord.send_event(thread.thread_id, event).await;
 
             add_feature_reactions(discord, &message, emojis, *SAVE_FOR_LATER_EMOJI).await;
         }
