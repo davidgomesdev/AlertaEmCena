@@ -23,8 +23,13 @@ pub async fn get_new_events_by_thread(
     let mut threads = BTreeMap::new();
     let mut sent_events = Vec::new();
 
+    let guild = discord.get_guild(channel_id).await;
+    let active_threads = discord.get_channel_active_threads(&guild, channel_id).await;
+
     for date in events.keys() {
-        let thread = discord.get_date_thread(channel_id, *date).await;
+        let thread = discord
+            .get_date_thread(&active_threads, channel_id, *date)
+            .await;
 
         let mut thread_events = discord.get_event_urls_sent(thread.channel_id).await;
 

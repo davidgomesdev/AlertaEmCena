@@ -5,8 +5,9 @@ use futures::{StreamExt, TryStreamExt};
 use lazy_static::lazy_static;
 use regex::Regex;
 use serenity::all::{
-    ChannelType, Colour, CreateEmbedAuthor, CreateThread, CurrentUser, Embed, GatewayIntents,
-    GetMessages, Message, MessageId, PrivateChannel, ReactionType, User,
+    ChannelType, Colour, CreateEmbedAuthor, CreateThread, CurrentUser, Embed,
+    GatewayIntents, GetMessages, GuildChannel, Message, MessageId, PartialGuild,
+    PrivateChannel, ReactionType, User,
 };
 use serenity::builder::{CreateEmbed, CreateMessage, EditMessage};
 use serenity::cache::Settings;
@@ -347,6 +348,7 @@ impl DiscordAPI {
         }
     }
 
+    #[instrument(skip(vote_emoji, event_embed, comment, description), fields(event_name = %event_embed.title.clone().unwrap_or_default()))]
     fn create_user_review_embed(
         vote_emoji: &EmojiConfig,
         event_embed: Embed,
@@ -396,6 +398,7 @@ impl DiscordAPI {
         }
     }
 
+    #[instrument(skip(self, dm), fields(dm_id = %dm.id.to_string()))]
     async fn is_event_sent_in_dm(&self, event_url: &str, dm: &PrivateChannel) -> bool {
         let mut last_message_id: Option<MessageId> = None;
         let mut searched_all_dms = false;
@@ -435,19 +438,50 @@ impl DiscordAPI {
         is_found
     }
 
-    pub async fn get_date_thread(&self, channel_id: ChannelId, date: NaiveDate) -> EventsThread {
+    #[instrument(skip(self, channel_id), fields(channel_id = %channel_id.to_string()))]
+    pub async fn get_guild(&self, channel_id: ChannelId) -> PartialGuild {
+        let guild_channel = channel_id
+            .to_channel(&self.client.http)
+            .await
+            .expect("Could not get channel")
+            .guild()
+            .expect("Channel does not appear to of a guild");
+        guild_channel
+            .guild_id
+            .to_partial_guild(&self.client.http)
+            .await
+            .unwrap()
+    }
+
+    #[instrument(skip(self, guild, channel_id), fields(guild_id = %guild.id.to_string(), channel_id = %channel_id.to_string()))]
+    pub async fn get_channel_active_threads(
+        &self,
+        guild: &PartialGuild,
+        channel_id: ChannelId,
+    ) -> Vec<GuildChannel> {
+        guild
+            .get_active_threads(&self.client.http)
+            .await
+            .unwrap()
+            .threads
+            .into_iter()
+            .filter(|thread| thread.parent_id == Some(channel_id))
+            .collect()
+    }
+
+    #[instrument(skip(self, threads, channel_id), fields(thread_count = %threads.len(), channel_id = %channel_id.to_string()))]
+    pub async fn get_date_thread(
+        &self,
+        threads: &Vec<GuildChannel>,
+        channel_id: ChannelId,
+        date: NaiveDate,
+    ) -> EventsThread {
         let year = date.year();
         let month_in_portuguese = month_to_portuguese_display(date);
 
-        for message in channel_id
-            .messages(&self.client.http, GetMessages::default())
-            .await
-            .unwrap()
-        {
-            if let Some(thread) = message.thread {
-                if thread.name == format!("{month_in_portuguese} {year}") {
-                    return EventsThread::new(thread.id);
-                }
+        for thread in threads {
+            if thread.name == format!("{month_in_portuguese} {year}") {
+                return EventsThread::new(thread.id);
             }
         }
 
@@ -464,6 +498,7 @@ impl DiscordAPI {
         )
     }
 
+    #[instrument(skip(self, channel_id), fields(channel_id = %channel_id.to_string()))]
     pub async fn get_event_urls_sent(&self, channel_id: ChannelId) -> Vec<String> {
         channel_id
             .messages_iter(&self.client.http)
@@ -488,6 +523,7 @@ impl DiscordAPI {
         self.delete_messages(channel_id, &messages).await;
     }
 
+    #[instrument(skip(self, channel_id, messages), fields(message_count = %messages.len(), channel_id = %channel_id.to_string()))]
     async fn delete_messages(&self, channel_id: &ChannelId, messages: &[Message]) {
         for chunk in messages.chunks(100) {
             debug!("Deleting {} messages", chunk.len());
