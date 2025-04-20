@@ -548,11 +548,11 @@ pub fn month_to_portuguese_display(date: NaiveDate) -> String {
 
 #[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
 pub struct EventsThread {
-    pub channel_id: ChannelId,
+    pub thread_id: ChannelId,
 }
 
 impl EventsThread {
     pub fn new(channel_id: ChannelId) -> EventsThread {
-        EventsThread { channel_id }
+        EventsThread { thread_id: channel_id }
     }
 }

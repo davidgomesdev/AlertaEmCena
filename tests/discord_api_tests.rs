@@ -260,8 +260,8 @@ mod discord {
             .await;
 
         assert_eq!(
-            date_thread.channel_id.get(),
-            second_date_thread.channel_id.get()
+            date_thread.thread_id.get(),
+            second_date_thread.thread_id.get()
         );
 
         let mut threads = api.get_channel_active_threads(&guild, *channel_id).await.into_iter().filter(|thread| thread.name == thread_name).collect::<Vec<GuildChannel>>();
@@ -291,9 +291,9 @@ mod discord {
             let thread = api
                 .get_date_thread(&active_threads, *channel_id, date)
                 .await;
-            let message = api.send_event(thread.channel_id, unique_event).await;
+            let message = api.send_event(thread.thread_id, unique_event).await;
 
-            (thread.channel_id, link, message)
+            (thread.thread_id, link, message)
         }
 
         pub fn generate_random_event() -> (String, Event, NaiveDate) {
