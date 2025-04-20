@@ -477,7 +477,7 @@ impl DiscordAPI {
         date: NaiveDate,
     ) -> EventsThread {
         let year = date.year();
-        let month_in_portuguese = month_to_portuguese_display(date);
+        let month_in_portuguese = month_to_portuguese_display(&date);
 
         for thread in threads {
             if thread.name == format!("{month_in_portuguese} {year}") {
@@ -542,7 +542,7 @@ impl DiscordAPI {
     }
 }
 
-pub fn month_to_portuguese_display(date: NaiveDate) -> String {
+pub fn month_to_portuguese_display(date: &NaiveDate) -> String {
     PORTUGUESE_MONTHS[(date.month() - 1) as usize].to_string()
 }
 
