@@ -189,9 +189,7 @@ where
     D: Deserializer<'de>,
 {
     Ok(match Value::deserialize(d)? {
-        Value::String(s) => {
-            NaiveDate::parse_from_str(&s, "%Y-%m-%d").map_err(de::Error::custom)?
-        }
+        Value::String(s) => NaiveDate::parse_from_str(&s, "%Y-%m-%d").map_err(de::Error::custom)?,
         _unknown => panic!("Found an unknown data type: {}", _unknown),
     })
 }
