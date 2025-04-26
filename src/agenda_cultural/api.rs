@@ -1,7 +1,8 @@
+use std::cmp::Ordering;
 use super::{dto::EventResponse, model::Event};
 use crate::agenda_cultural::dto::SingleEventResponse;
 use crate::agenda_cultural::model::Category;
-use chrono::{Datelike, NaiveDate};
+use chrono::{Datelike, NaiveDate, TimeDelta, Utc};
 use lazy_static::lazy_static;
 use reqwest::{Client, Response};
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
@@ -9,6 +10,7 @@ use reqwest_retry::policies::ExponentialBackoff;
 use reqwest_retry::RetryTransientMiddleware;
 use scraper::{Html, Selector};
 use std::collections::BTreeMap;
+use std::ops::Add;
 use tracing::{error, info, warn};
 use voca_rs::strip::strip_tags;
 
@@ -74,20 +76,39 @@ impl AgendaCulturalAPI {
     async fn parse_events_by_date(response: Vec<EventResponse>) -> BTreeMap<NaiveDate, Vec<Event>> {
         let mut events_by_date: BTreeMap<NaiveDate, Vec<Event>> = BTreeMap::new();
 
+        Self::fill_incoming_months(&response, &mut events_by_date);
+
         for response in response {
             let model = Self::convert_response_to_model(&response).await;
             let date =
-                NaiveDate::from_ymd_opt(response.start_date.year(), response.start_date.month(), 1)
+                response.start_date.with_day(1)
                     .unwrap();
 
             if let Some(events) = events_by_date.get_mut(&date) {
                 events.push(model);
             } else {
+                warn!("The date of event '{}' was not in the list! (when it should)", model.title);
                 events_by_date.insert(date, Vec::from([model]));
             }
         }
 
         events_by_date
+    }
+
+    fn fill_incoming_months(response: &Vec<EventResponse>, events_by_date: &mut BTreeMap<NaiveDate, Vec<Event>>) {
+        let max_month = response.iter().max_by(|first, second| first.start_date.cmp(&second.start_date));
+
+        if let Some(last_event) = max_month {
+            let date =
+                NaiveDate::from_ymd_opt(last_event.start_date.year(), last_event.start_date.month(), 1)
+                    .unwrap();
+            let mut min_date = Utc::now().date_naive().with_day(1).unwrap();
+
+            while min_date.cmp(&date) != Ordering::Greater {
+                events_by_date.insert(min_date, Vec::from([]));
+                min_date = min_date.add(TimeDelta::days(31));
+            }
+        }
     }
 
     async fn convert_response_to_model(response: &EventResponse) -> Event {
