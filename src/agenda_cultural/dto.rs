@@ -1,16 +1,12 @@
 use super::model::{Event, EventDetails, Schedule};
 use chrono::NaiveDate;
-use futures::TryFutureExt;
 use lazy_static::lazy_static;
 use regex::Regex;
-use reqwest::Response;
-use scraper::{Html, Selector};
 use serde::{de, Deserialize, Deserializer};
 use serde_either::SingleOrVec;
 use serde_json::Value;
 use std::collections::{BTreeMap, HashSet};
 use tracing::warn;
-use voca_rs::strip::strip_tags;
 
 #[derive(Debug, Deserialize)]
 pub struct SingleEventResponse {
@@ -40,27 +36,15 @@ pub struct EventResponse {
 
 lazy_static! {
     static ref REMOVE_YEAR: Regex = Regex::new(r" *?(\d{4}) *?").unwrap();
-    static ref EVENT_DESCRIPTION_SELECTOR: Selector =
-        Selector::parse(".entry-container > :not([class])").unwrap();
 }
 
 impl EventResponse {
     #[tracing::instrument(skip(self), fields(self.link = %self.link))]
-    pub async fn to_model(&self) -> Event {
+    pub async fn to_model(&self, description: String) -> Event {
         let subtitle = match self.subtitle.clone() {
             SingleOrVec::Single(subtitle) => subtitle,
             SingleOrVec::Vec(vec) => vec.concat(),
         };
-        let description = self.get_full_description().await.unwrap_or_else(|| {
-            let preview_description = Self::clean_description(&self.description.concat());
-
-            warn!(
-                "Unable to get full description. Using only preview description ({})",
-                preview_description
-            );
-
-            preview_description
-        });
 
         Event::new(
             self.title.rendered.to_string(),
@@ -104,44 +88,6 @@ impl EventResponse {
 
     fn remove_year_from_description(date: &str) -> String {
         REMOVE_YEAR.replace_all(date, "").to_string()
-    }
-
-    async fn get_full_description(&self) -> Option<String> {
-        let full_page: Result<String, _> = reqwest::get(&self.link)
-            .inspect_err(|err| warn!("Failed to get full page: {:?}", err))
-            .and_then(|res: Response| {
-                res.text()
-                    .inspect_err(|err| warn!("Failed to get full page text: {}", err))
-            })
-            .await;
-
-        if full_page.is_err() {
-            return None;
-        }
-
-        Self::extract_full_description(&full_page.unwrap())
-    }
-
-    fn extract_full_description(full_page: &str) -> Option<String> {
-        let page_html = Html::parse_fragment(full_page);
-
-        let description_elements = page_html
-            .select(&EVENT_DESCRIPTION_SELECTOR)
-            .map(|p| p.inner_html().to_string())
-            .collect::<Vec<String>>();
-
-        if description_elements.is_empty() {
-            warn!("Not able to find description in page",);
-            return None;
-        }
-
-        let full_description = Self::clean_description(&description_elements.join("\n\n"));
-
-        Some(full_description)
-    }
-
-    fn clean_description(description: &str) -> String {
-        strip_tags(description).replace("&nbsp;", " ")
     }
 }
 
@@ -197,7 +143,6 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fs::read_to_string;
 
     #[test_log::test]
     fn when_a_date_spans_only_one_year_should_get_only_day_and_month() {
@@ -364,34 +309,6 @@ mod tests {
             NaiveDate::from_ymd_opt(2025, 2, 22).unwrap(),
             "{:?}",
             dto
-        );
-    }
-
-    #[test_log::test]
-    fn should_extract_full_description() {
-        let event_page =
-            read_to_string("res/tests/event_page.html").expect("Could not get test resource");
-        let actual = EventResponse::extract_full_description(&event_page);
-
-        assert!(actual.is_some());
-        assert_eq!(
-            actual.unwrap(),
-            read_to_string("res/tests/event_page_full_description.txt")
-                .expect("Could not get test resource")
-        );
-    }
-
-    #[test_log::test]
-    fn should_extract_full_description_with_italic_description() {
-        let event_page = read_to_string("res/tests/event_page_with_italic_description.html")
-            .expect("Could not get test resource");
-        let actual = EventResponse::extract_full_description(&event_page);
-
-        assert!(actual.is_some());
-        assert_eq!(
-            actual.unwrap(),
-            read_to_string("res/tests/event_page_full_description_with_italic_description.txt")
-                .expect("Could not get test resource")
         );
     }
 }
