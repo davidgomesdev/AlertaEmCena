@@ -163,7 +163,6 @@ impl AgendaCulturalAPI {
             .get(url)
             .send()
             .await
-            .inspect_err(|err| warn!("Failed to get full page: {:?}", err))
             .expect("Error getting full page")
             .text()
             .await
@@ -211,8 +210,7 @@ impl AgendaCulturalAPI {
         let full_page: Result<Response, _> = REST_CLIENT
             .get(link)
             .send()
-            .await
-            .inspect_err(|err| warn!("Failed to get full page: {:?}", err));
+            .await;
 
         match full_page {
             Ok(full_page) => {
@@ -227,7 +225,10 @@ impl AgendaCulturalAPI {
 
                 Self::extract_full_description(&description.unwrap())
             }
-            Err(_) => None,
+            Err(err) => {
+                warn!("Failed to get full page: {:?}", err);
+                None
+            },
         }
     }
 

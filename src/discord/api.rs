@@ -15,6 +15,7 @@ use serenity::model::id::ChannelId;
 use serenity::prelude::SerenityError;
 use serenity::Client;
 use std::env;
+use serenity::model::error::Error;
 use tracing::{debug, error, info, instrument, warn};
 
 const AUTHOR_NAME: &str = "AlertaEmCena";
@@ -89,22 +90,42 @@ impl DiscordAPI {
     pub async fn send_event(&self, channel_id: ChannelId, event: Event) -> Message {
         info!("Sending event");
 
+        let description = event.details.description;
+        let embed = CreateEmbed::new()
+            .title(event.title)
+            .url(event.link)
+            .description(description.clone())
+            .author(CreateEmbedAuthor::new(AUTHOR_NAME))
+            .color(Colour::new(0x005eeb))
+            .field("Datas", event.occurring_at.dates, true)
+            .field("Onde", event.venue, true)
+            .image(event.details.image_url);
+
         let message_builder = CreateMessage::new().add_embed(
-            CreateEmbed::new()
-                .title(event.title.clone())
-                .url(event.link.clone())
-                .description(event.details.description.clone())
-                .author(CreateEmbedAuthor::new(AUTHOR_NAME))
-                .color(Colour::new(0x005eeb))
-                .field("Datas", event.occurring_at.dates, true)
-                .field("Onde", event.venue.clone(), true)
-                .image(event.details.image_url.clone()),
+            embed.clone()
         );
 
-        channel_id
+        match channel_id
             .send_message(&self.client.http, message_builder)
-            .await
-            .expect("Failed to send message")
+            .await {
+            Ok(message) => { message }
+            Err(err) => {
+                if let serenity::Error::Model(Error::EmbedTooLarge(_)) = err {
+                    info!("Couldn't send embed with full description, retrying with a shorter description");
+
+                    let first_line = description.lines().next();
+                    let short_description: String = first_line.unwrap_or(&description).chars().take(4000).collect();
+                    let message_builder = CreateMessage::new().add_embed(embed.description(short_description));
+
+                    channel_id
+                        .send_message(&self.client.http, message_builder)
+                        .await
+                        .expect("Failed to send message")
+                } else {
+                    panic!("Failed sending message due to '{}'", err);
+                }
+            }
+        }
     }
 
     #[instrument(skip(self, message, emoji))]
