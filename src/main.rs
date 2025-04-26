@@ -1,3 +1,4 @@
+use alertaemcena::agenda_cultural::api::AgendaCulturalAPI;
 use alertaemcena::agenda_cultural::model::{Category, Event};
 use alertaemcena::api::*;
 use alertaemcena::config::env_loader::load_config;
@@ -50,14 +51,15 @@ async fn run(config: &Config, discord: &DiscordAPI, category: Category, channel_
         handle_reaction_features(discord, threads, &config.voting_emojis).await;
     }
 
-    let new_events = get_new_events_by_thread(
-        discord,
-        &guild,
-        &category,
-        channel_id,
-        config.debug_config.event_limit,
-    )
-    .await;
+    let events = AgendaCulturalAPI::get_events_by_month(&category, config.debug_config.event_limit)
+        .await
+        .unwrap();
+
+    if events.is_empty() {
+        panic!("No events found");
+    }
+
+    let new_events = filter_new_events_by_thread(discord, &guild, events, channel_id).await;
 
     send_new_events(
         discord,

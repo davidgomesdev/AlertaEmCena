@@ -236,7 +236,12 @@ mod discord {
         api.get_date_thread(&active_threads, *channel_id, thread_date)
             .await;
 
-        let mut threads = api.get_channel_active_threads(&guild, *channel_id).await.into_iter().filter(|thread| thread.name == thread_name).collect::<Vec<GuildChannel>>();
+        let mut threads = api
+            .get_channel_active_threads(&guild, *channel_id)
+            .await
+            .into_iter()
+            .filter(|thread| thread.name == thread_name)
+            .collect::<Vec<GuildChannel>>();
 
         assert_eq!(threads.len(), 1);
         assert_eq!(threads.pop().unwrap().name, thread_name);
@@ -264,16 +269,89 @@ mod discord {
             second_date_thread.thread_id.get()
         );
 
-        let mut threads = api.get_channel_active_threads(&guild, *channel_id).await.into_iter().filter(|thread| thread.name == thread_name).collect::<Vec<GuildChannel>>();
+        let mut threads = api
+            .get_channel_active_threads(&guild, *channel_id)
+            .await
+            .into_iter()
+            .filter(|thread| thread.name == thread_name)
+            .collect::<Vec<GuildChannel>>();
 
         assert_eq!(threads.len(), 1);
         assert_eq!(threads.pop().unwrap().name, thread_name);
     }
 
+    mod end_to_end {
+        use crate::discord::channel_id;
+        use crate::discord::helpers::{build_api, generate_random_event, send_event};
+        use alertaemcena::agenda_cultural::model::Event;
+        use alertaemcena::api::filter_new_events_by_thread;
+        use alertaemcena::discord::api::EventsThread;
+        use chrono::{NaiveDate, TimeDelta};
+        use std::collections::BTreeMap;
+        use std::ops::Add;
+
+        #[test_log::test(tokio::test)]
+        async fn api_should_filter_sent_events() {
+            let api = build_api().await;
+            let original_date = NaiveDate::from_ymd_opt(2023, 1, 1).unwrap();
+            let random_event = generate_random_event();
+            let link = random_event.0;
+            let events: BTreeMap<NaiveDate, Vec<Event>> =
+                BTreeMap::from([(original_date, Vec::from([random_event.1.clone()]))]);
+
+            let events = filter_new_events_by_thread(
+                &api,
+                &api.get_guild(*channel_id).await,
+                events,
+                *channel_id,
+            )
+            .await;
+
+            let find_result = find_new_unique_event(&link, events);
+
+            assert!(find_result.is_some());
+
+            send_event(&api, random_event.1.clone(), original_date).await;
+
+            let events: BTreeMap<NaiveDate, Vec<Event>> = BTreeMap::from([(
+                original_date.add(TimeDelta::weeks(12)),
+                Vec::from([random_event.1]),
+            )]);
+
+            let events = filter_new_events_by_thread(
+                &api,
+                &api.get_guild(*channel_id).await,
+                events,
+                *channel_id,
+            )
+            .await;
+
+            let find_result = find_new_unique_event(&link, events);
+
+            assert!(find_result.is_none());
+        }
+
+        fn find_new_unique_event(link: &str, events: BTreeMap<EventsThread, Vec<Event>>) -> Option<Event> {
+            let mut sent_event: Option<Event> = None;
+
+            for (_, events) in events {
+                if let Some(event) = events.into_iter().find(|event| event.link == link) {
+                    if sent_event.is_some() {
+                        panic!("Event was sent twice!");
+                    }
+
+                    sent_event = Some(event);
+                }
+            }
+
+            sent_event
+        }
+    }
+
     mod helpers {
         use super::{channel_id, tester_token, token};
         use alertaemcena::agenda_cultural::model::{Event, EventDetails, Schedule};
-        use alertaemcena::discord::api::DiscordAPI;
+        use alertaemcena::discord::api::{DiscordAPI, EventsThread};
         use chrono::NaiveDate;
         use lazy_static::lazy_static;
         use serenity::all::{ChannelId, Message};
@@ -286,14 +364,19 @@ mod discord {
 
         pub async fn send_random_event(api: &DiscordAPI) -> (ChannelId, String, Message) {
             let (link, unique_event, date) = generate_random_event();
+            let (thread, message) = send_event(api, unique_event, date).await;
+
+            (thread.thread_id, link, message)
+        }
+
+        pub async fn send_event(api: &DiscordAPI, event: Event, date: NaiveDate) -> (EventsThread, Message) {
             let guild = api.get_guild(*channel_id).await;
             let active_threads = api.get_channel_active_threads(&guild, *channel_id).await;
             let thread = api
                 .get_date_thread(&active_threads, *channel_id, date)
                 .await;
-            let message = api.send_event(thread.thread_id, unique_event).await;
-
-            (thread.thread_id, link, message)
+            let message = api.send_event(thread.thread_id, event).await;
+            (thread, message)
         }
 
         pub fn generate_random_event() -> (String, Event, NaiveDate) {
@@ -327,7 +410,12 @@ mod discord {
         pub async fn build_api() -> DiscordAPI {
             let api = DiscordAPI::new(&token, true).await;
 
-            cleanup_channel(&api).await;
+            let _ = INIT
+                .get_or_init(|| async {
+                    cleanup_channel(&api).await;
+                    0
+                })
+                .await;
 
             api
         }
@@ -335,28 +423,27 @@ mod discord {
         pub async fn build_api_without_cache() -> DiscordAPI {
             let api = DiscordAPI::new(&token, false).await;
 
-            cleanup_channel(&api).await;
+            let _ = INIT
+                .get_or_init(|| async {
+                    cleanup_channel(&api).await;
+                    0
+                })
+                .await;
 
             api
         }
 
         async fn cleanup_channel(api: &DiscordAPI) {
-            let _ = INIT
-                .get_or_init(|| async {
-                    let guild = &api.get_guild(*channel_id).await;
+            let guild = &api.get_guild(*channel_id).await;
 
-                    for thread in api.get_channel_active_threads(guild, *channel_id).await {
-                        thread
-                            .delete(&api.client.http)
-                            .await
-                            .expect("Failed to delete thread!");
-                    }
+            for thread in api.get_channel_active_threads(guild, *channel_id).await {
+                thread
+                    .delete(&api.client.http)
+                    .await
+                    .expect("Failed to delete thread!");
+            }
 
-                    api.delete_all_messages(&channel_id).await;
-
-                    0
-                })
-                .await;
+            api.delete_all_messages(&channel_id).await;
         }
 
         pub async fn build_tester_api() -> DiscordAPI {

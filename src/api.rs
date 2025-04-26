@@ -1,5 +1,4 @@
-use crate::agenda_cultural::api::AgendaCulturalAPI;
-use crate::agenda_cultural::model::{Category, Event};
+use crate::agenda_cultural::model::Event;
 use crate::config::model::EmojiConfig;
 use crate::discord::api::{DiscordAPI, EventsThread};
 use chrono::NaiveDate;
@@ -7,30 +6,22 @@ use serenity::all::{ChannelId, GuildChannel, Message, PartialGuild};
 use std::collections::BTreeMap;
 use tracing::info;
 
-pub async fn get_new_events_by_thread(
+pub async fn filter_new_events_by_thread(
     discord: &DiscordAPI,
     guild: &PartialGuild,
-    category: &Category,
+    events_by_month: BTreeMap<NaiveDate, Vec<Event>>,
     channel_id: ChannelId,
-    event_limit: Option<i32>,
 ) -> BTreeMap<EventsThread, Vec<Event>> {
-    let events = AgendaCulturalAPI::get_events_by_month(category, event_limit)
-        .await
-        .unwrap();
-
-    if events.is_empty() {
-        panic!("No events found");
-    }
-
     let active_threads = discord.get_channel_active_threads(guild, channel_id).await;
 
-    let threads = get_threads_by_month(discord, channel_id, &events, &active_threads).await;
+    let threads =
+        get_threads_by_month(discord, channel_id, &events_by_month, &active_threads).await;
     let sent_events = get_sent_events(discord, &active_threads).await;
 
     threads
         .into_iter()
         .map(|(date, thread)| {
-            let unsent_events = events[&date]
+            let unsent_events = events_by_month[&date]
                 .iter()
                 .filter(|&e| !sent_events.contains(&e.link))
                 .cloned()
@@ -41,10 +32,7 @@ pub async fn get_new_events_by_thread(
         .collect()
 }
 
-async fn get_sent_events(
-    discord: &DiscordAPI,
-    threads: &[GuildChannel]
-) -> Vec<String> {
+async fn get_sent_events(discord: &DiscordAPI, threads: &[GuildChannel]) -> Vec<String> {
     let mut sent_events = Vec::new();
 
     for thread in threads.iter() {
