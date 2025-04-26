@@ -33,7 +33,10 @@ async fn main() {
         }
     }
 
-    run(&config, &discord, Category::Artes, config.artes_channel_id).await;
+    if !config.debug_config.skip_artes {
+        run(&config, &discord, Category::Artes, config.artes_channel_id).await;
+    }
+
     run(
         &config,
         &discord,
