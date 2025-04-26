@@ -521,6 +521,13 @@ impl DiscordAPI {
             .expect("Failed to fetch messages");
 
         self.delete_messages(channel_id, &messages).await;
+
+        let guild = self.get_guild(*channel_id).await;
+        let threads = self.get_channel_active_threads(&guild, *channel_id).await;
+
+        for thread in threads {
+            thread.delete(&self.client.http).await.expect("Failed to delete threads!");
+        }
     }
 
     #[instrument(skip(self, channel_id, messages), fields(message_count = %messages.len(), channel_id = %channel_id.to_string()))]
