@@ -53,7 +53,7 @@ async fn get_threads_by_month(
     discord: &DiscordAPI,
     channel_id: ChannelId,
     events: &BTreeMap<NaiveDate, Vec<Event>>,
-    active_threads: &Vec<GuildChannel>,
+    active_threads: &[GuildChannel],
 ) -> BTreeMap<NaiveDate, EventsThread> {
     let mut threads = BTreeMap::new();
 

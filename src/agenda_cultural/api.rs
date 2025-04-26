@@ -95,7 +95,7 @@ impl AgendaCulturalAPI {
         events_by_date
     }
 
-    fn fill_incoming_months(response: &Vec<EventResponse>, events_by_date: &mut BTreeMap<NaiveDate, Vec<Event>>) {
+    fn fill_incoming_months(response: &[EventResponse], events_by_date: &mut BTreeMap<NaiveDate, Vec<Event>>) {
         let max_month = response.iter().max_by(|first, second| first.start_date.cmp(&second.start_date));
 
         if let Some(last_event) = max_month {

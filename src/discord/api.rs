@@ -493,7 +493,7 @@ impl DiscordAPI {
     #[instrument(skip(self, threads, channel_id), fields(thread_count = %threads.len(), channel_id = %channel_id.to_string()))]
     pub async fn get_date_thread(
         &self,
-        threads: &Vec<GuildChannel>,
+        threads: &[GuildChannel],
         channel_id: ChannelId,
         date: NaiveDate,
     ) -> EventsThread {
