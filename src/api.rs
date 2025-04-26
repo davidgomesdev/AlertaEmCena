@@ -1,7 +1,7 @@
 use crate::agenda_cultural::api::AgendaCulturalAPI;
 use crate::agenda_cultural::model::{Category, Event};
 use crate::config::model::EmojiConfig;
-use crate::discord::api::{month_to_portuguese_display, DiscordAPI, EventsThread};
+use crate::discord::api::{DiscordAPI, EventsThread};
 use chrono::NaiveDate;
 use serenity::all::{ChannelId, GuildChannel, Message, PartialGuild};
 use std::collections::BTreeMap;
@@ -43,7 +43,7 @@ pub async fn get_new_events_by_thread(
 
 async fn get_sent_events(
     discord: &DiscordAPI,
-    threads: &Vec<GuildChannel>
+    threads: &[GuildChannel]
 ) -> Vec<String> {
     let mut sent_events = Vec::new();
 
@@ -71,10 +71,10 @@ async fn get_threads_by_month(
 
     for date in events.keys() {
         let thread = discord
-            .get_date_thread(&active_threads, channel_id, *date)
+            .get_date_thread(active_threads, channel_id, *date)
             .await;
 
-        threads.insert(date.clone(), thread);
+        threads.insert(*date, thread);
     }
 
     threads
