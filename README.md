@@ -8,6 +8,8 @@ Notifies about the latest theater and musical pieces happening.
 
 Read in [load_config](src/config/env_loader.rs).
 
+Set LOKI_URL to `https://<your user id>:<Your Grafana.com API Token>@<loki instance>.grafana.net`.
+
 ### Voting emojis
 
 Add 5 emojis on the bot. (symbolizing worst to best)
