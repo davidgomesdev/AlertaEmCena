@@ -48,7 +48,7 @@ async fn main() {
 
 async fn run(config: &Config, discord: &DiscordAPI, category: Category, channel_id: ChannelId) {
     let guild = discord.get_guild(channel_id).await;
-    let threads = discord.get_channel_active_threads(&guild, channel_id).await;
+    let threads = discord.get_channel_threads(&guild, channel_id).await;
 
     if !config.debug_config.skip_feature_reactions {
         handle_reaction_features(discord, threads, &config.voting_emojis).await;

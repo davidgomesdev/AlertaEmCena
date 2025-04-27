@@ -5,17 +5,17 @@ use futures::{StreamExt, TryStreamExt};
 use lazy_static::lazy_static;
 use regex::Regex;
 use serenity::all::{
-    ChannelType, Colour, CreateEmbedAuthor, CreateThread, CurrentUser, Embed,
-    GatewayIntents, GetMessages, GuildChannel, Message, MessageId, PartialGuild,
-    PrivateChannel, ReactionType, User,
+    ChannelType, Colour, CreateEmbedAuthor, CreateThread, CurrentUser, Embed, GatewayIntents,
+    GetMessages, GuildChannel, Message, MessageId, PartialGuild, PrivateChannel, ReactionType,
+    User,
 };
 use serenity::builder::{CreateEmbed, CreateMessage, EditMessage};
 use serenity::cache::Settings;
+use serenity::model::error::Error;
 use serenity::model::id::ChannelId;
 use serenity::prelude::SerenityError;
 use serenity::Client;
 use std::env;
-use serenity::model::error::Error;
 use tracing::{debug, error, info, instrument, warn};
 
 const AUTHOR_NAME: &str = "AlertaEmCena";
@@ -101,21 +101,25 @@ impl DiscordAPI {
             .field("Onde", event.venue, true)
             .image(event.details.image_url);
 
-        let message_builder = CreateMessage::new().add_embed(
-            embed.clone()
-        );
+        let message_builder = CreateMessage::new().add_embed(embed.clone());
 
         match channel_id
             .send_message(&self.client.http, message_builder)
-            .await {
-            Ok(message) => { message }
+            .await
+        {
+            Ok(message) => message,
             Err(err) => {
                 if let serenity::Error::Model(Error::EmbedTooLarge(_)) = err {
                     info!("Couldn't send embed with full description, retrying with a shorter description");
 
                     let first_line = description.lines().next();
-                    let short_description: String = first_line.unwrap_or(&description).chars().take(4000).collect();
-                    let message_builder = CreateMessage::new().add_embed(embed.description(short_description));
+                    let short_description: String = first_line
+                        .unwrap_or(&description)
+                        .chars()
+                        .take(4000)
+                        .collect();
+                    let message_builder =
+                        CreateMessage::new().add_embed(embed.description(short_description));
 
                     channel_id
                         .send_message(&self.client.http, message_builder)
@@ -475,19 +479,27 @@ impl DiscordAPI {
     }
 
     #[instrument(skip(self, guild, channel_id), fields(guild_id = %guild.id.to_string(), channel_id = %channel_id.to_string()))]
-    pub async fn get_channel_active_threads(
+    pub async fn get_channel_threads(
         &self,
         guild: &PartialGuild,
         channel_id: ChannelId,
     ) -> Vec<GuildChannel> {
-        guild
+        let mut archived_threads = channel_id
+            .get_archived_public_threads(&self.client.http, None, None)
+            .await
+            .expect("Could not get archived threads")
+            .threads;
+        let mut active_threads: Vec<GuildChannel> = guild
             .get_active_threads(&self.client.http)
             .await
             .unwrap()
             .threads
             .into_iter()
             .filter(|thread| thread.parent_id == Some(channel_id))
-            .collect()
+            .collect();
+
+        archived_threads.append(&mut active_threads);
+        archived_threads
     }
 
     #[instrument(skip(self, threads, channel_id), fields(thread_count = %threads.len(), channel_id = %channel_id.to_string()))]
@@ -544,10 +556,13 @@ impl DiscordAPI {
         self.delete_messages(channel_id, &messages).await;
 
         let guild = self.get_guild(*channel_id).await;
-        let threads = self.get_channel_active_threads(&guild, *channel_id).await;
+        let threads = self.get_channel_threads(&guild, *channel_id).await;
 
         for thread in threads {
-            thread.delete(&self.client.http).await.expect("Failed to delete threads!");
+            thread
+                .delete(&self.client.http)
+                .await
+                .expect("Failed to delete threads!");
         }
     }
 
@@ -576,11 +591,13 @@ pub fn month_to_portuguese_display(date: &NaiveDate) -> String {
 
 #[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
 pub struct EventsThread {
-    pub thread_id: ChannelId
+    pub thread_id: ChannelId,
 }
 
 impl EventsThread {
     pub fn new(channel_id: ChannelId) -> EventsThread {
-        EventsThread { thread_id: channel_id }
+        EventsThread {
+            thread_id: channel_id,
+        }
     }
 }

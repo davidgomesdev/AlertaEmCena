@@ -214,7 +214,7 @@ mod discord {
     async fn should_get_threads_of_only_the_specified_channel() {
         let api = build_api().await;
         let guild = api.get_guild(*channel_id).await;
-        let active_threads = api.get_channel_active_threads(&guild, *channel_id).await;
+        let active_threads = api.get_channel_threads(&guild, *channel_id).await;
 
         assert!(
             active_threads
@@ -231,13 +231,13 @@ mod discord {
         let thread_name = "Março 2021";
 
         let guild = api.get_guild(*channel_id).await;
-        let active_threads = api.get_channel_active_threads(&guild, *channel_id).await;
+        let active_threads = api.get_channel_threads(&guild, *channel_id).await;
 
         api.get_date_thread(&active_threads, *channel_id, thread_date)
             .await;
 
         let mut threads = api
-            .get_channel_active_threads(&guild, *channel_id)
+            .get_channel_threads(&guild, *channel_id)
             .await
             .into_iter()
             .filter(|thread| thread.name == thread_name)
@@ -254,12 +254,12 @@ mod discord {
         let thread_date = NaiveDate::from_ymd_opt(1999, 3, 12).unwrap();
         let thread_name = "Março 1999";
 
-        let active_threads = api.get_channel_active_threads(&guild, *channel_id).await;
+        let active_threads = api.get_channel_threads(&guild, *channel_id).await;
         let date_thread = api
             .get_date_thread(&active_threads, *channel_id, thread_date)
             .await;
 
-        let active_threads = api.get_channel_active_threads(&guild, *channel_id).await;
+        let active_threads = api.get_channel_threads(&guild, *channel_id).await;
         let second_date_thread = api
             .get_date_thread(&active_threads, *channel_id, thread_date)
             .await;
@@ -270,7 +270,7 @@ mod discord {
         );
 
         let mut threads = api
-            .get_channel_active_threads(&guild, *channel_id)
+            .get_channel_threads(&guild, *channel_id)
             .await
             .into_iter()
             .filter(|thread| thread.name == thread_name)
@@ -371,7 +371,7 @@ mod discord {
 
         pub async fn send_event(api: &DiscordAPI, event: Event, date: NaiveDate) -> (EventsThread, Message) {
             let guild = api.get_guild(*channel_id).await;
-            let active_threads = api.get_channel_active_threads(&guild, *channel_id).await;
+            let active_threads = api.get_channel_threads(&guild, *channel_id).await;
             let thread = api
                 .get_date_thread(&active_threads, *channel_id, date)
                 .await;
@@ -436,7 +436,7 @@ mod discord {
         async fn cleanup_channel(api: &DiscordAPI) {
             let guild = &api.get_guild(*channel_id).await;
 
-            for thread in api.get_channel_active_threads(guild, *channel_id).await {
+            for thread in api.get_channel_threads(guild, *channel_id).await {
                 thread
                     .delete(&api.client.http)
                     .await
