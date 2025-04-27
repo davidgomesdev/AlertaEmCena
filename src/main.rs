@@ -9,6 +9,7 @@ use serenity::all::{ChannelId, GuildChannel};
 use std::collections::BTreeMap;
 use std::process::exit;
 use tracing::{debug, info, instrument, warn};
+use alertaemcena::tracing::setup_loki;
 
 lazy_static! {
     pub static ref SAVE_FOR_LATER_EMOJI: char = '🔖';
@@ -16,7 +17,7 @@ lazy_static! {
 
 #[tokio::main]
 async fn main() {
-    tracing_subscriber::fmt::init();
+    setup_loki().await;
 
     let config = load_config();
 
