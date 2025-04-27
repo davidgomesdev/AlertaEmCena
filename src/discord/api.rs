@@ -2,6 +2,7 @@ use crate::agenda_cultural::model::Event;
 use crate::config::model::EmojiConfig;
 use chrono::{Datelike, NaiveDate};
 use futures::{StreamExt, TryStreamExt};
+use itertools::Itertools;
 use lazy_static::lazy_static;
 use regex::Regex;
 use serenity::all::{
@@ -16,6 +17,7 @@ use serenity::model::id::ChannelId;
 use serenity::prelude::SerenityError;
 use serenity::Client;
 use std::env;
+use std::fmt::Debug;
 use tracing::{debug, error, info, instrument, warn};
 
 const AUTHOR_NAME: &str = "AlertaEmCena";
@@ -489,6 +491,9 @@ impl DiscordAPI {
             .await
             .expect("Could not get archived threads")
             .threads;
+
+        debug!("Found archived threads: [{:?}]", Self::concat_thread_names(&archived_threads));
+
         let mut active_threads: Vec<GuildChannel> = guild
             .get_active_threads(&self.client.http)
             .await
@@ -498,8 +503,14 @@ impl DiscordAPI {
             .filter(|thread| thread.parent_id == Some(channel_id))
             .collect();
 
+        debug!("Found active threads: [{:?}]", Self::concat_thread_names(&active_threads));
+
         archived_threads.append(&mut active_threads);
         archived_threads
+    }
+
+    fn concat_thread_names(threads: &[GuildChannel]) -> String {
+        threads.iter().map(|thread| thread.name.as_str()).join(",")
     }
 
     #[instrument(skip(self, threads, channel_id), fields(thread_count = %threads.len(), channel_id = %channel_id.to_string()))]
