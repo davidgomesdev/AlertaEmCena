@@ -12,13 +12,13 @@ pub async fn filter_new_events_by_thread(
     events_by_month: BTreeMap<NaiveDate, Vec<Event>>,
     channel_id: ChannelId,
 ) -> BTreeMap<EventsThread, Vec<Event>> {
-    let active_threads = discord.get_channel_threads(guild, channel_id).await;
+    let threads = discord.get_channel_threads(guild, channel_id).await;
 
-    let threads =
-        get_threads_by_month(discord, channel_id, &events_by_month, &active_threads).await;
-    let sent_events = get_sent_events(discord, &active_threads).await;
+    let threads_by_month =
+        get_threads_by_month(discord, channel_id, &events_by_month, &threads).await;
+    let sent_events = get_sent_events(discord, &threads).await;
 
-    threads
+    threads_by_month
         .into_iter()
         .map(|(date, thread)| {
             let unsent_events = events_by_month[&date]

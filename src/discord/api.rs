@@ -5,9 +5,9 @@ use futures::{StreamExt, TryStreamExt};
 use lazy_static::lazy_static;
 use regex::Regex;
 use serenity::all::{
-    ChannelType, Colour, CreateEmbedAuthor, CreateThread, CurrentUser, Embed, GatewayIntents,
-    GetMessages, GuildChannel, Message, MessageId, PartialGuild, PrivateChannel, ReactionType,
-    User,
+    AutoArchiveDuration, ChannelType, Colour, CreateEmbedAuthor, CreateThread, CurrentUser, Embed,
+    GatewayIntents, GetMessages, GuildChannel, Message, MessageId, PartialGuild, PrivateChannel,
+    ReactionType, User,
 };
 use serenity::builder::{CreateEmbed, CreateMessage, EditMessage};
 use serenity::cache::Settings;
@@ -523,7 +523,8 @@ impl DiscordAPI {
                 .create_thread(
                     &self.client.http,
                     CreateThread::new(format!("{month_in_portuguese} {year}"))
-                        .kind(ChannelType::PublicThread),
+                        .kind(ChannelType::PublicThread)
+                        .auto_archive_duration(AutoArchiveDuration::OneWeek),
                 )
                 .await
                 .unwrap()
