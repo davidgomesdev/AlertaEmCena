@@ -136,7 +136,7 @@ impl DiscordAPI {
 
     #[instrument(skip(self, message, emoji))]
     pub async fn add_custom_reaction(&self, message: &Message, emoji: &EmojiConfig) {
-        debug!("Adding reaction");
+        trace!("Adding reaction");
 
         match message
             .react(
@@ -154,7 +154,7 @@ impl DiscordAPI {
             .await
         {
             Ok(_) => {
-                debug!("Successfully added '{}' reaction", emoji.name);
+                trace!("Successfully added '{}' reaction", emoji.name);
             }
             Err(err) => {
                 error!(
@@ -294,7 +294,7 @@ impl DiscordAPI {
                 trace!("Found user {} with vote {}", user.id, vote + 1);
 
                 if !self.is_event_sent_in_dm(event_url, &dm).await {
-                    debug!("Sent vote {} for user {}", user.id, vote + 1);
+                    info!("Sent vote {} for user {}", user.id, vote + 1);
                     self.send_user_review_in_dm(&vote_emojis[vote], event_embed, &dm)
                         .await;
                 }
