@@ -11,18 +11,20 @@ use scraper::{Html, Selector};
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::ops::Add;
+use std::time::Duration;
 use tracing::{error, info, trace, warn};
 use voca_rs::strip::strip_tags;
 
 const AGENDA_EVENTS_URL: &str = "https://www.agendalx.pt/wp-json/agendalx/v1/events";
 const AGENDA_PAGE_BY_ID_PATH: &str = "https://www.agendalx.pt/?p=";
 const EVENT_TYPE: &str = "event";
-const MAX_RETRIES: u32 = 5;
 
 lazy_static! {
     static ref REST_CLIENT: ClientWithMiddleware = ClientBuilder::new(Client::new())
         .with(RetryTransientMiddleware::new_with_policy(
-            ExponentialBackoff::builder().build_with_max_retries(MAX_RETRIES)
+            ExponentialBackoff::builder()
+                .retry_bounds(Duration::from_millis(50), Duration::from_millis(500))
+                .build_with_total_retry_duration_and_max_retries(Duration::from_secs(3))
         ))
         .build();
     static ref EVENT_ID_SELECTOR: Selector = Selector::parse(&format!(
@@ -82,7 +84,7 @@ impl AgendaCulturalAPI {
             .iter()
             .filter(|event| event.start_date != NaiveDate::MIN)
         {
-            let model = Self::convert_response_to_model(&response).await;
+            let model = Self::convert_response_to_model(response).await;
             let date = response.start_date.with_day(1).unwrap();
 
             if let Some(events) = events_by_date.get_mut(&date) {
@@ -252,7 +254,7 @@ impl AgendaCulturalAPI {
             .collect::<Vec<String>>();
 
         if description_elements.is_empty() {
-            warn!("Not able to find description in page",);
+            warn!("Not able to find description in page");
             return None;
         }
 

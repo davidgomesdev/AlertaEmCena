@@ -331,7 +331,10 @@ mod discord {
             assert!(find_result.is_none());
         }
 
-        fn find_new_unique_event(link: &str, events: BTreeMap<EventsThread, Vec<Event>>) -> Option<Event> {
+        fn find_new_unique_event(
+            link: &str,
+            events: BTreeMap<EventsThread, Vec<Event>>,
+        ) -> Option<Event> {
             let mut sent_event: Option<Event> = None;
 
             for (_, events) in events {
@@ -369,7 +372,11 @@ mod discord {
             (thread.thread_id, link, message)
         }
 
-        pub async fn send_event(api: &DiscordAPI, event: Event, date: NaiveDate) -> (EventsThread, Message) {
+        pub async fn send_event(
+            api: &DiscordAPI,
+            event: Event,
+            date: NaiveDate,
+        ) -> (EventsThread, Message) {
             let guild = api.get_guild(*channel_id).await;
             let active_threads = api.get_channel_threads(&guild, *channel_id).await;
             let thread = api
