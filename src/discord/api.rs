@@ -6,9 +6,9 @@ use itertools::Itertools;
 use lazy_static::lazy_static;
 use regex::Regex;
 use serenity::all::{
-    AutoArchiveDuration, ChannelType, Colour, CreateEmbedAuthor, CreateThread, CurrentUser, Embed,
-    GatewayIntents, GetMessages, GuildChannel, Message, MessageId, PartialGuild, PrivateChannel,
-    ReactionType, User,
+    AutoArchiveDuration, ChannelType, Colour, CreateEmbedAuthor, CreateThread, CurrentUser,
+    EditThread, Embed, GatewayIntents, GetMessages, GuildChannel, Message, MessageId, PartialGuild,
+    PrivateChannel, ReactionType, User,
 };
 use serenity::builder::{CreateEmbed, CreateMessage, EditMessage};
 use serenity::cache::Settings;
@@ -18,6 +18,7 @@ use serenity::prelude::SerenityError;
 use serenity::Client;
 use std::env;
 use std::fmt::Debug;
+use tracing::field::debug;
 use tracing::{debug, error, info, instrument, trace, warn};
 
 const AUTHOR_NAME: &str = "AlertaEmCena";
@@ -487,15 +488,9 @@ impl DiscordAPI {
         guild: &PartialGuild,
         channel_id: ChannelId,
     ) -> Vec<GuildChannel> {
-        let mut archived_threads = channel_id
-            .get_archived_public_threads(&self.client.http, None, None)
-            .await
-            .expect("Could not get archived threads")
-            .threads;
+        self.unarchive_archived_threads(channel_id).await;
 
-        debug!("Found archived threads: [{:?}]", Self::concat_thread_names(&archived_threads));
-
-        let mut active_threads: Vec<GuildChannel> = guild
+        let active_threads: Vec<GuildChannel> = guild
             .get_active_threads(&self.client.http)
             .await
             .unwrap()
@@ -504,10 +499,34 @@ impl DiscordAPI {
             .filter(|thread| thread.parent_id == Some(channel_id))
             .collect();
 
-        debug!("Found active threads: [{:?}]", Self::concat_thread_names(&active_threads));
+        debug!(
+            "Found threads: [{:?}]",
+            Self::concat_thread_names(&active_threads)
+        );
 
-        archived_threads.append(&mut active_threads);
-        archived_threads
+        active_threads
+    }
+
+    async fn unarchive_archived_threads(&self, channel_id: ChannelId) {
+        let mut archived_threads = channel_id
+            .get_archived_public_threads(&self.client.http, None, None)
+            .await
+            .expect("Could not get archived threads")
+            .threads;
+
+        debug!(
+            "Found archived threads: [{:?}]",
+            Self::concat_thread_names(&archived_threads)
+        );
+
+        for thread in &mut archived_threads {
+            thread
+                .edit_thread(&self.client.http, EditThread::new().archived(false))
+                .await
+                .expect("Failed to unarchive archived threads!")
+        }
+
+        debug("Unarchived archived threads");
     }
 
     fn concat_thread_names(threads: &[GuildChannel]) -> String {
