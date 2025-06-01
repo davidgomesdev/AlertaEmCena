@@ -1,4 +1,3 @@
-use std::cmp::Ordering;
 use super::{dto::EventResponse, model::Event};
 use crate::agenda_cultural::dto::SingleEventResponse;
 use crate::agenda_cultural::model::Category;
@@ -9,9 +8,10 @@ use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
 use reqwest_retry::policies::ExponentialBackoff;
 use reqwest_retry::RetryTransientMiddleware;
 use scraper::{Html, Selector};
+use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::ops::Add;
-use tracing::{error, info, warn};
+use tracing::{error, info, trace, warn};
 use voca_rs::strip::strip_tags;
 
 const AGENDA_EVENTS_URL: &str = "https://www.agendalx.pt/wp-json/agendalx/v1/events";
@@ -78,16 +78,20 @@ impl AgendaCulturalAPI {
 
         Self::fill_incoming_months(&response, &mut events_by_date);
 
-        for response in response {
+        for response in response
+            .iter()
+            .filter(|event| event.start_date != NaiveDate::MIN)
+        {
             let model = Self::convert_response_to_model(&response).await;
-            let date =
-                response.start_date.with_day(1)
-                    .unwrap();
+            let date = response.start_date.with_day(1).unwrap();
 
             if let Some(events) = events_by_date.get_mut(&date) {
                 events.push(model);
             } else {
-                warn!("The date of event '{}' was not in the list! (when it should)", model.title);
+                warn!(
+                    "The date of event '{}' was not in the list! (when it should)",
+                    model.title
+                );
                 events_by_date.insert(date, Vec::from([model]));
             }
         }
@@ -95,13 +99,21 @@ impl AgendaCulturalAPI {
         events_by_date
     }
 
-    fn fill_incoming_months(response: &[EventResponse], events_by_date: &mut BTreeMap<NaiveDate, Vec<Event>>) {
-        let max_month = response.iter().max_by(|first, second| first.start_date.cmp(&second.start_date));
+    fn fill_incoming_months(
+        response: &[EventResponse],
+        events_by_date: &mut BTreeMap<NaiveDate, Vec<Event>>,
+    ) {
+        let max_month = response
+            .iter()
+            .max_by(|first, second| first.start_date.cmp(&second.start_date));
 
         if let Some(last_event) = max_month {
-            let date =
-                NaiveDate::from_ymd_opt(last_event.start_date.year(), last_event.start_date.month(), 1)
-                    .unwrap();
+            let date = NaiveDate::from_ymd_opt(
+                last_event.start_date.year(),
+                last_event.start_date.month(),
+                1,
+            )
+            .unwrap();
             let mut min_date = Utc::now().date_naive().with_day(1).unwrap();
 
             while min_date.cmp(&date) != Ordering::Greater {
@@ -143,6 +155,8 @@ impl AgendaCulturalAPI {
             .text()
             .await
             .expect("Received invalid response");
+        trace!("Json response: {json_response}");
+
         let parsed_response = serde_json::from_str::<SingleEventResponse>(&json_response);
 
         match parsed_response {
@@ -207,10 +221,7 @@ impl AgendaCulturalAPI {
     }
 
     async fn get_full_description(link: &str) -> Option<String> {
-        let full_page: Result<Response, _> = REST_CLIENT
-            .get(link)
-            .send()
-            .await;
+        let full_page: Result<Response, _> = REST_CLIENT.get(link).send().await;
 
         match full_page {
             Ok(full_page) => {
@@ -228,7 +239,7 @@ impl AgendaCulturalAPI {
             Err(err) => {
                 warn!("Failed to get full page: {:?}", err);
                 None
-            },
+            }
         }
     }
 
