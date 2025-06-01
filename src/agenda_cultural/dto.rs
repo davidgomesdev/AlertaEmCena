@@ -6,7 +6,7 @@ use serde::{de, Deserialize, Deserializer};
 use serde_either::SingleOrVec;
 use serde_json::Value;
 use std::collections::{BTreeMap, HashSet};
-use tracing::warn;
+use tracing::{error, instrument, warn};
 
 #[derive(Debug, Deserialize)]
 pub struct SingleEventResponse {
@@ -135,7 +135,18 @@ where
     D: Deserializer<'de>,
 {
     Ok(match Value::deserialize(d)? {
-        Value::String(s) => NaiveDate::parse_from_str(&s, "%Y-%m-%d").map_err(de::Error::custom)?,
+        Value::String(s) => {
+            if s.is_empty() {
+                return Ok(NaiveDate::MIN);
+            }
+
+            return Ok(
+                NaiveDate::parse_from_str(&s, "%Y-%m-%d").unwrap_or_else(|err| {
+                    warn!("Failed to parse date. Err: {err}");
+                    NaiveDate::MIN
+                }),
+            );
+        }
         _unknown => panic!("Found an unknown data type: {}", _unknown),
     })
 }
