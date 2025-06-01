@@ -4,12 +4,12 @@ use alertaemcena::api::*;
 use alertaemcena::config::env_loader::load_config;
 use alertaemcena::config::model::{Config, DebugConfig, EmojiConfig};
 use alertaemcena::discord::api::{DiscordAPI, EventsThread};
+use alertaemcena::tracing::setup_loki;
 use lazy_static::lazy_static;
 use serenity::all::{ChannelId, GuildChannel};
 use std::collections::BTreeMap;
 use std::process::exit;
 use tracing::{debug, info, instrument, warn};
-use alertaemcena::tracing::setup_loki;
 
 lazy_static! {
     pub static ref SAVE_FOR_LATER_EMOJI: char = '🔖';
