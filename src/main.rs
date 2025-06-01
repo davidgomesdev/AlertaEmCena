@@ -9,7 +9,7 @@ use lazy_static::lazy_static;
 use serenity::all::{ChannelId, GuildChannel};
 use std::collections::BTreeMap;
 use std::process::exit;
-use tracing::{debug, info, instrument, warn};
+use tracing::{debug, error, info, instrument, warn};
 
 lazy_static! {
     pub static ref SAVE_FOR_LATER_EMOJI: char = '🔖';
@@ -17,6 +17,8 @@ lazy_static! {
 
 #[tokio::main]
 async fn main() {
+    let _shutdown_hook = ShutdownHook;
+
     setup_loki().await;
 
     let config = load_config();
@@ -139,5 +141,13 @@ async fn send_new_events(
 
             add_feature_reactions(discord, &message, emojis, *SAVE_FOR_LATER_EMOJI).await;
         }
+    }
+}
+
+struct ShutdownHook;
+
+impl Drop for ShutdownHook {
+    fn drop(&mut self) {
+        error!("App failed, check logs for further details")
     }
 }
