@@ -9,7 +9,7 @@ use lazy_static::lazy_static;
 use serenity::all::{ChannelId, GuildChannel};
 use std::collections::BTreeMap;
 use std::process::exit;
-use tracing::{debug, error, info, instrument, warn};
+use tracing::{debug, info, instrument, warn};
 
 lazy_static! {
     pub static ref SAVE_FOR_LATER_EMOJI: char = '🔖';

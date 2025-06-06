@@ -5,11 +5,7 @@ use futures::{StreamExt, TryStreamExt};
 use itertools::Itertools;
 use lazy_static::lazy_static;
 use regex::Regex;
-use serenity::all::{
-    AutoArchiveDuration, ChannelType, Colour, CreateEmbedAuthor, CreateThread,
-    CurrentUser, EditThread, Embed, GatewayIntents, GetMessages, GuildChannel,
-    Message, MessageId, PartialGuild, PrivateChannel, ReactionType, User,
-};
+use serenity::all::{AutoArchiveDuration, ChannelType, Colour, CreateEmbedAuthor, CreateThread, CurrentUser, EditThread, Embed, GatewayIntents, GetMessages, GuildChannel, Message, MessageId, MessageReaction, PartialGuild, PrivateChannel, ReactionType, User};
 use serenity::builder::{CreateEmbed, CreateMessage, EditMessage};
 use serenity::cache::Settings;
 use serenity::model::error::Error;
@@ -18,6 +14,7 @@ use serenity::prelude::SerenityError;
 use serenity::Client;
 use std::env;
 use std::fmt::Debug;
+use serenity::all::ReactionType::{Custom, Unicode};
 use tracing::field::debug;
 use tracing::{debug, error, info, instrument, trace, warn};
 
@@ -195,8 +192,13 @@ impl DiscordAPI {
         &self,
         message: &mut Message,
         emoji_char: char,
+        // TODO: wtf, remove it
         vote_emojis: &[EmojiConfig; 5],
     ) {
+        let save_for_later_reaction = ReactionType::from(emoji_char);
+
+        if Self::has_no_user_emoji_reaction(message, &emoji_char.to_string()) { return }
+
         let users_that_voted: Vec<String> = self
             .get_user_votes(message, vote_emojis)
             .await
@@ -207,7 +209,7 @@ impl DiscordAPI {
         let saved_for_later_user_ids: Vec<String> = message
             .reaction_users(
                 &self.client.http,
-                ReactionType::from(emoji_char),
+                save_for_later_reaction,
                 None,
                 None,
             )
@@ -317,10 +319,12 @@ impl DiscordAPI {
         let mut users_votes: [Vec<User>; 5] = [vec![], vec![], vec![], vec![], vec![]];
 
         for (index, voting_emoji) in vote_emojis.iter().enumerate() {
+            if Self::has_no_user_votes(event_message, voting_emoji) { continue; }
+
             let users_that_reacted: Vec<User> = event_message
                 .reaction_users(
                     &self.client.http,
-                    ReactionType::Custom {
+                    Custom {
                         animated: false,
                         id: voting_emoji
                             .id
@@ -345,6 +349,45 @@ impl DiscordAPI {
         }
 
         users_votes
+    }
+
+    // TODO: unit tests
+    fn has_no_user_votes(event_message: &Message, voting_emoji: &EmojiConfig) -> bool {
+        let reaction = event_message.reactions.iter().find(|reaction| if let Custom { id, .. } = reaction.reaction_type { id == voting_emoji.id } else { false });
+
+        if let Some(reaction) = reaction {
+            if let Some(value) = Self::has_no_user_reactions(reaction) {
+                return value;
+            }
+        } else {
+            warn!("Message does not have reaction emoji '{}'!", voting_emoji.name);
+        }
+        false
+    }
+
+    fn has_no_user_emoji_reaction(event_message: &Message, emoji_char: &str) -> bool {
+        let reaction = event_message.reactions.iter().find(|reaction| if let Unicode(char) = &reaction.reaction_type { *char == emoji_char } else { false });
+
+        if let Some(reaction) = reaction {
+            if let Some(value) = Self::has_no_user_reactions(reaction) {
+                return value;
+            }
+        } else {
+            warn!("Message does not have saved for later emoji!");
+        }
+        false
+    }
+
+    fn has_no_user_reactions(reaction: &MessageReaction) -> Option<bool> {
+        if reaction.count == 1 {
+            // No one has voted
+            if reaction.me {
+                return Some(true)
+            } else {
+                warn!("Self did not react!")
+            }
+        }
+        None
     }
 
     #[instrument(skip(self, vote_emoji, event_embed, dm), fields(user_name = %dm.recipient.name.to_string(), vote = %vote_emoji.name.to_string(), event_url = event_embed.url))]
