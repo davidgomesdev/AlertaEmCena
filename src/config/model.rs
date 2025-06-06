@@ -21,7 +21,7 @@ pub struct DebugConfig {
 
 #[derive(Debug, Clone)]
 pub struct EmojiConfig {
-    pub id: i64,
+    pub id: u64,
     pub name: String,
 }
 
