@@ -259,6 +259,7 @@ impl DiscordAPI {
         let users_votes = self.get_user_votes(event_message, vote_emojis).await;
 
         if users_votes.is_empty() {
+            trace!("No user has voted on this message");
             return;
         }
 
