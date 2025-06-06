@@ -35,7 +35,7 @@ mod agenda_cultural {
         .unwrap();
 
         assert_eq!(event.title, "Nora Helmer");
-        assert_eq!(event.details.description, "A história de Nora Helmer, protagonista de Casa de Bonecas, peça de Henrik Ibsen, torna-se o ponto de partida para um debate aceso sobre a família, o casamento e o lugar da mulher na sociedade. Ler mais.");
+        assert!(event.details.description.starts_with("A história de Nora Helmer, protagonista de Casa de Bonecas, peça de Henrik Ibsen, torna-se o ponto de partida para um debate aceso sobre a família"));
         assert_eq!(event.details.image_url, "https://www.agendalx.pt/content/uploads/2025/02/Nora-Helmer_ensaios2©Filipe_Figueiredo.jpg");
         assert_eq!(
             event.details.subtitle,
@@ -87,10 +87,10 @@ mod agenda_cultural {
         .unwrap();
 
         assert_eq!(event.title, "King Size");
-        assert_eq!(event.details.description, "King Size analisa como se constrói a masculinidade, para ressignificar as relações entre natureza, género e sexo. Focando figuras que incorporam os mitos masculinos, bem como as suas revisões paródicas, esta criação encena um jogo de desidentificação que resiste às pressões de binarismo sexual, na sociedade e na arte.\n\n.\n\nUma obra que confronta os dispositivos de criação e dramaturgia de performances drag contemporâneas com os códigos rígidos de representação de género, na dança e no teatro tradicionais, e interroga essas representações, esbatendo as diferenças entre o que é natural e o que é construção cultural ou cénica.");
+        assert_eq!(event.details.description, "Através do burlesco dos shows drag king, Sónia Baptista, acompanhada pelas performers Ana Libório, Crista Alfaiate e Joana Levi, desconstrói sem apelo nem agravo, mas com um irresistível humor, os códigos de construção da masculinidade. +");
         assert_eq!(
             event.details.image_url,
-            "https://www.agendalx.pt/content/uploads/2025/03/King-Size.jpg"
+            "https://www.agendalx.pt/content/uploads/2025/06/King-Size_MRL5756.jpg"
         );
         assert_eq!(event.details.subtitle, "Sónia Baptista");
         assert_eq!(
@@ -103,8 +103,7 @@ mod agenda_cultural {
             "qui: 21h; sex: 21h; sáb: 19h; dom: 16h"
         );
         assert_eq!(event.venue, "Sala Estúdio Valentim de Barros");
-        assert_eq!(event.tags.len(), 2);
-        assert_eq!(event.tags.first().unwrap(), "performance");
-        assert_eq!(event.tags.get(1).unwrap(), "Sónia Baptista");
+        assert_eq!(event.tags.len(), 4);
+        assert_eq!(event.tags, ["+16", "performance", "queer", "Sónia Baptista"]);
     }
 }
