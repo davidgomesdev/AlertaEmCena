@@ -351,43 +351,39 @@ impl DiscordAPI {
         users_votes
     }
 
-    // TODO: unit tests
     fn has_no_user_votes(event_message: &Message, voting_emoji: &EmojiConfig) -> bool {
         let reaction = event_message.reactions.iter().find(|reaction| if let Custom { id, .. } = reaction.reaction_type { id == voting_emoji.id } else { false });
 
         if let Some(reaction) = reaction {
-            if let Some(value) = Self::has_no_user_reactions(reaction) {
-                return value;
-            }
+           Self::has_no_user_reactions(reaction)
         } else {
             warn!("Message does not have reaction emoji '{}'!", voting_emoji.name);
+            false
         }
-        false
     }
 
     fn has_no_user_emoji_reaction(event_message: &Message, emoji_char: &str) -> bool {
         let reaction = event_message.reactions.iter().find(|reaction| if let Unicode(char) = &reaction.reaction_type { *char == emoji_char } else { false });
 
         if let Some(reaction) = reaction {
-            if let Some(value) = Self::has_no_user_reactions(reaction) {
-                return value;
-            }
+             Self::has_no_user_reactions(reaction)
         } else {
             warn!("Message does not have saved for later emoji!");
+            false
         }
-        false
     }
 
-    fn has_no_user_reactions(reaction: &MessageReaction) -> Option<bool> {
+    // TODO: unit tests
+    fn has_no_user_reactions(reaction: &MessageReaction) -> bool {
         if reaction.count == 1 {
             // No one has voted
             if reaction.me {
-                return Some(true)
+                return true
             } else {
                 warn!("Self did not react!")
             }
         }
-        None
+        false
     }
 
     #[instrument(skip(self, vote_emoji, event_embed, dm), fields(user_name = %dm.recipient.name.to_string(), vote = %vote_emoji.name.to_string(), event_url = event_embed.url))]
@@ -650,6 +646,71 @@ impl DiscordAPI {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test_log::test]
+    fn when_no_user_has_voted_other_than_bot_should_return_true() {
+        let reaction = serde_json::from_str(r#"
+        {
+          "count": 1,
+          "count_details": {
+            "burst": 0,
+            "normal": 1
+          },
+          "me": true,
+          "me_burst": false,
+          "emoji": { "id": null, "name": "1" },
+          "burst_colors": []
+        }
+        "#).unwrap();
+        let has_no_user_reactions = DiscordAPI::has_no_user_reactions(&reaction);
+
+        assert_eq!(has_no_user_reactions, true);
+    }
+
+    #[test_log::test]
+    fn when_at_least_one_user_has_voted_other_than_bot_should_return_false() {
+        let reaction = serde_json::from_str(r#"
+        {
+          "count": 2,
+          "count_details": {
+            "burst": 0,
+            "normal": 2
+          },
+          "me": true,
+          "me_burst": false,
+          "emoji": { "id": null, "name": "1" },
+          "burst_colors": []
+        }
+        "#).unwrap();
+        let has_no_user_reactions = DiscordAPI::has_no_user_reactions(&reaction);
+
+        assert_eq!(has_no_user_reactions, false);
+    }
+
+    #[test_log::test]
+    fn when_one_user_has_voted_and_the_bot_has_not_should_return_false() {
+        let reaction = serde_json::from_str(r#"
+        {
+          "count": 1,
+          "count_details": {
+            "burst": 0,
+            "normal": 1
+          },
+          "me": false,
+          "me_burst": false,
+          "emoji": { "id": null, "name": "1" },
+          "burst_colors": []
+        }
+        "#).unwrap();
+        let has_no_user_reactions = DiscordAPI::has_no_user_reactions(&reaction);
+
+        assert_eq!(has_no_user_reactions, false);
     }
 }
 
