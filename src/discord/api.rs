@@ -186,26 +186,17 @@ impl DiscordAPI {
         }
     }
 
-    #[instrument(skip(self, message, vote_emojis), fields(event = %message.embeds.first().map(|embed| embed.url.clone().unwrap()).unwrap_or_default()
+    #[instrument(skip(self, message), fields(event = %message.embeds.first().map(|embed| embed.url.clone().unwrap()).unwrap_or_default()
     ))]
     pub async fn tag_save_for_later_reactions(
         &self,
         message: &mut Message,
         emoji_char: char,
-        // TODO: wtf, remove it
-        vote_emojis: &[EmojiConfig; 5],
     ) {
         let save_for_later_reaction = ReactionType::from(emoji_char);
 
         if Self::has_no_user_emoji_reaction(message, &emoji_char.to_string()) { return }
 
-        let users_that_voted: Vec<String> = self
-            .get_user_votes(message, vote_emojis)
-            .await
-            .iter()
-            .flatten()
-            .map(|user| user.id.to_string())
-            .collect();
         let saved_for_later_user_ids: Vec<String> = message
             .reaction_users(
                 &self.client.http,
@@ -219,7 +210,6 @@ impl DiscordAPI {
                     .into_iter()
                     .map(|user| user.id.to_string())
                     .filter(|user_id| *user_id != self.own_user.id.to_string())
-                    .filter(|user_id| !users_that_voted.contains(user_id))
                     .collect()
             })
             .expect("Couldn't get users that reacted!");
@@ -373,7 +363,6 @@ impl DiscordAPI {
         }
     }
 
-    // TODO: unit tests
     fn has_no_user_reactions(reaction: &MessageReaction) -> bool {
         if reaction.count == 1 {
             // No one has voted
