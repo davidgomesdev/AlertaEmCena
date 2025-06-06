@@ -120,14 +120,10 @@ async fn send_new_events(
     debug_config: &DebugConfig,
     emojis: &[EmojiConfig; 5],
 ) {
-    info!("Sending new events");
-
     if new_events.is_empty() {
         info!("No new events to send");
         return;
     }
-
-    info!("Found {} new events", new_events.len());
 
     if debug_config.skip_sending {
         info!("Skipping sending events");
@@ -135,6 +131,16 @@ async fn send_new_events(
     }
 
     for (thread, events) in new_events {
+        info!(
+            "Found {} new events for thread '{}'",
+            events.len(),
+            thread
+                .thread_id
+                .name(&discord.client.http)
+                .await
+                .unwrap_or_default()
+        );
+
         for event in events {
             let message = discord.send_event(thread.thread_id, event).await;
 
