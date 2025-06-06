@@ -147,6 +147,6 @@ struct ShutdownHook;
 
 impl Drop for ShutdownHook {
     fn drop(&mut self) {
-        error!("App failed, check logs for further details")
+        info!("App finished")
     }
 }
