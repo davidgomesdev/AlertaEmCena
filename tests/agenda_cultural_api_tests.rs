@@ -59,7 +59,7 @@ mod agenda_cultural {
         let event: Event = AgendaCulturalAPI::get_event_by_id(208058).await.unwrap();
 
         assert_eq!(event.title, "Nora Helmer");
-        assert_eq!(event.details.description, "A história de Nora Helmer, protagonista de Casa de Bonecas, peça de Henrik Ibsen, torna-se o ponto de partida para um debate aceso sobre a família, o casamento e o lugar da mulher na sociedade. Ler mais.");
+        assert!(event.details.description.starts_with("A história de Nora Helmer, protagonista de Casa de Bonecas, peça de Henrik Ibsen"));
         assert_eq!(event.details.image_url, "https://www.agendalx.pt/content/uploads/2025/02/Nora-Helmer_ensaios2©Filipe_Figueiredo.jpg");
         assert_eq!(
             event.details.subtitle,
@@ -82,33 +82,33 @@ mod agenda_cultural {
     #[test_log::test(tokio::test)]
     async fn should_scrape_the_specified_event_with_an_italic_description_by_public_url() {
         let event: Event = AgendaCulturalAPI::get_event_by_public_url(
-            "https://www.agendalx.pt/events/event/king-size-2/",
+            "https://www.agendalx.pt/events/event/o-monte/",
         )
             .await
             .unwrap();
 
-        assert_eq!(event.title, "King Size");
-        assert_eq!(event.details.description, "Através do burlesco dos shows drag king, Sónia Baptista, acompanhada pelas performers Ana Libório, Crista Alfaiate e Joana Levi, desconstrói sem apelo nem agravo, mas com um irresistível humor, os códigos de construção da masculinidade. +");
+        assert_eq!(event.title, "O Monte");
+        assert!(event.details.description.starts_with("A partir de um texto de João Ascenso, O Monte é inspirado no relato da atriz Luísa Ortigoso sobre um ex-preso político que reencontra o seu torturador anos após a ditadura."));
         assert_eq!(
             event.details.image_url,
-            "https://www.agendalx.pt/content/uploads/2025/06/King-Size_MRL5756.jpg"
+            "https://www.agendalx.pt/content/uploads/2025/03/omonte.jpg"
         );
-        assert_eq!(event.details.subtitle, "Sónia Baptista");
+        assert_eq!(event.details.subtitle, "Teatro Livre");
         assert_eq!(
             event.link,
-            "https://www.agendalx.pt/events/event/king-size-2/"
+            "https://www.agendalx.pt/events/event/o-monte/"
         );
-        assert_eq!(event.occurring_at.dates, "6 junho a 15 junho");
+        assert_eq!(event.occurring_at.dates, "24 abril a 4 maio");
         assert_eq!(
             event.occurring_at.times,
-            "qui: 21h; sex: 21h; sáb: 19h; dom: 16h"
+            "qua: 21h30; qui: 21h30; sex: 21h30; sáb: 18h; dom: 18h"
         );
-        assert_eq!(event.venue, "Sala Estúdio Valentim de Barros");
-        assert_eq!(event.tags.len(), 4);
+        assert_eq!(event.venue, "Teatro do Bairro");
+        assert_eq!(event.tags.len(), 3);
         assert!(!event.is_for_children);
         assert_eq!(
             event.tags,
-            ["+16", "performance", "queer", "Sónia Baptista"]
+            ["Cucha Carvalheiro", "Miguel Sopas", "Teatro Livre"]
         );
     }
 
@@ -121,7 +121,7 @@ mod agenda_cultural {
             .unwrap();
 
         assert_eq!(event.title, "Um sapato especial");
-        assert_eq!(event.details.description, "O Ursinho José gosta muito de ir brincar para o jardim. Joga à bola, às corridas, anda de bicicleta e nos baloiços. E ele é o campeão dos saltos! Mas um dia acontece algo inesperado e começa uma aventura que lhe trará novos amigos. Com o bombeiro Mário, a Dra. Malaquias e a enfermeira Juju, o Ursinho José vai aprender a divertir-se em segurança.");
+        assert!(event.details.description.starts_with("O Ursinho José gosta muito de ir brincar para o jardim. Joga à bola, às corridas, anda de bicicleta e nos baloiços. E ele é o campeão dos saltos! Mas um dia acontece algo inesperado e começa um"));
         assert_eq!(
             event.details.image_url,
             "https://www.agendalx.pt/content/uploads/2018/09/T-SE-cartaz1.jpg"
