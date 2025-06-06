@@ -39,6 +39,8 @@ const PORTUGUESE_MONTHS: [&str; 12] = [
     "Dezembro",
 ];
 
+const CHILDREN_LABEL: &str = "🧸 para crianças";
+
 lazy_static! {
     static ref USER_MENTION_REGEX: Regex =
         Regex::new("<@(\\d+)>").expect("Failed to create mention regex");
@@ -94,7 +96,12 @@ impl DiscordAPI {
     pub async fn send_event(&self, channel_id: ChannelId, event: Event) -> Message {
         info!("Sending event");
 
-        let description = event.details.description;
+        let mut description = event.details.description;
+
+        if event.is_for_children {
+            description = format!("{}\n\n{}", description.clone(), CHILDREN_LABEL);
+        }
+
         let embed = CreateEmbed::new()
             .title(event.title)
             .url(event.link)
@@ -143,7 +150,7 @@ impl DiscordAPI {
         match message
             .react(
                 &self.client.http,
-                ReactionType::Custom {
+                Custom {
                     animated: false,
                     id: emoji
                         .id

@@ -264,7 +264,7 @@ impl AgendaCulturalAPI {
     }
 
     fn clean_description(description: &str) -> String {
-        strip_tags(description).replace("&nbsp;", " ")
+        strip_tags(description).replace("&nbsp;", " ").trim_end_matches("\n").to_owned()
     }
 }
 

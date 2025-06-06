@@ -1,3 +1,5 @@
+const CHILDREN_TAG: &str = "crianças";
+
 #[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct Event {
@@ -7,6 +9,7 @@ pub struct Event {
     pub occurring_at: Schedule,
     pub venue: String,
     pub tags: Vec<String>,
+    pub is_for_children: bool,
 }
 
 impl Event {
@@ -24,6 +27,7 @@ impl Event {
             link,
             occurring_at,
             venue,
+            is_for_children: tags.iter().any(|tag| tag.to_lowercase() == CHILDREN_TAG),
             tags,
         }
     }

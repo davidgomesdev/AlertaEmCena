@@ -375,6 +375,7 @@ mod discord {
                 },
                 venue: "Teatro Nacional D. Maria II, Lisboa".to_string(),
                 tags: vec!["festival".to_string()],
+                is_for_children: false
             };
             (link, unique_event, date)
         }
