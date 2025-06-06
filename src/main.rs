@@ -103,7 +103,7 @@ async fn handle_reaction_features(
             }
 
             discord
-                .tag_save_for_later_reactions(&mut message, *SAVE_FOR_LATER_EMOJI, vote_emojis)
+                .tag_save_for_later_reactions(&mut message, *SAVE_FOR_LATER_EMOJI)
                 .await;
 
             discord

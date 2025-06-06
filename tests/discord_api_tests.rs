@@ -83,12 +83,11 @@ mod discord {
             .await;
 
         let tester_api = build_tester_api().await;
-        let voting_emojis = load_voting_emojis_config("VOTING_EMOJIS");
 
         tester_api
             .add_reaction_to_message(&message, *SAVE_FOR_LATER_EMOJI)
             .await;
-        api.tag_save_for_later_reactions(&mut message, *SAVE_FOR_LATER_EMOJI, &voting_emojis)
+        api.tag_save_for_later_reactions(&mut message, *SAVE_FOR_LATER_EMOJI)
             .await;
 
         let message = tester_api
@@ -126,19 +125,18 @@ mod discord {
             .await;
 
         let tester_api = build_tester_api().await;
-        let voting_emojis = load_voting_emojis_config("VOTING_EMOJIS");
 
         tester_api
             .add_reaction_to_message(&message, *SAVE_FOR_LATER_EMOJI)
             .await;
-        api.tag_save_for_later_reactions(&mut message, *SAVE_FOR_LATER_EMOJI, &voting_emojis)
+        api.tag_save_for_later_reactions(&mut message, *SAVE_FOR_LATER_EMOJI)
             .await;
 
         message
             .delete_reaction_emoji(&tester_api.client.http, *SAVE_FOR_LATER_EMOJI)
             .await
             .unwrap();
-        api.tag_save_for_later_reactions(&mut message, *SAVE_FOR_LATER_EMOJI, &voting_emojis)
+        api.tag_save_for_later_reactions(&mut message, *SAVE_FOR_LATER_EMOJI)
             .await;
 
         let message = tester_api
@@ -175,39 +173,6 @@ mod discord {
 
         api.send_privately_users_review(&message, &voting_emojis)
             .await;
-    }
-
-    #[test_log::test(tokio::test)]
-    async fn when_someone_saves_for_later_reacts_with_a_three_vote_should_remove_the_user_from_interested(
-    ) {
-        let api = build_api().await;
-        let (thread_id, _, mut message) = send_random_event(&api).await;
-        let voting_emojis = load_voting_emojis_config("VOTING_EMOJIS");
-
-        add_feature_reactions(&api, &message, &voting_emojis, *SAVE_FOR_LATER_EMOJI).await;
-
-        let tester_api = build_tester_api().await;
-
-        tester_api
-            .add_reaction_to_message(&message, *SAVE_FOR_LATER_EMOJI)
-            .await;
-        tester_api
-            .add_custom_reaction(&message, &voting_emojis[2])
-            .await;
-
-        api.tag_save_for_later_reactions(&mut message, *SAVE_FOR_LATER_EMOJI, &voting_emojis)
-            .await;
-
-        let message = tester_api
-            .client
-            .http
-            .get_message(thread_id, message.id)
-            .await
-            .expect("Failed getting sent message");
-        let saved_later = message.content;
-
-        assert!(!saved_later.contains(tester_api.own_user.id.to_string().as_str()));
-        assert!(!saved_later.contains(api.own_user.id.to_string().as_str()));
     }
 
     #[test_log::test(tokio::test)]
