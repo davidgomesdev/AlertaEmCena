@@ -104,6 +104,9 @@ mod agenda_cultural {
         );
         assert_eq!(event.venue, "Sala Estúdio Valentim de Barros");
         assert_eq!(event.tags.len(), 4);
-        assert_eq!(event.tags, ["+16", "performance", "queer", "Sónia Baptista"]);
+        assert_eq!(
+            event.tags,
+            ["+16", "performance", "queer", "Sónia Baptista"]
+        );
     }
 }

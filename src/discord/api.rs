@@ -5,7 +5,12 @@ use futures::{StreamExt, TryStreamExt};
 use itertools::Itertools;
 use lazy_static::lazy_static;
 use regex::Regex;
-use serenity::all::{AutoArchiveDuration, ChannelType, Colour, CreateEmbedAuthor, CreateThread, CurrentUser, EditThread, Embed, GatewayIntents, GetMessages, GuildChannel, Message, MessageId, MessageReaction, PartialGuild, PrivateChannel, ReactionType, User};
+use serenity::all::ReactionType::{Custom, Unicode};
+use serenity::all::{
+    AutoArchiveDuration, ChannelType, Colour, CreateEmbedAuthor, CreateThread, CurrentUser,
+    EditThread, Embed, GatewayIntents, GetMessages, GuildChannel, Message, MessageId,
+    MessageReaction, PartialGuild, PrivateChannel, ReactionType, User,
+};
 use serenity::builder::{CreateEmbed, CreateMessage, EditMessage};
 use serenity::cache::Settings;
 use serenity::model::error::Error;
@@ -14,7 +19,6 @@ use serenity::prelude::SerenityError;
 use serenity::Client;
 use std::env;
 use std::fmt::Debug;
-use serenity::all::ReactionType::{Custom, Unicode};
 use tracing::field::debug;
 use tracing::{debug, error, info, instrument, trace, warn};
 
@@ -188,22 +192,15 @@ impl DiscordAPI {
 
     #[instrument(skip(self, message), fields(event = %message.embeds.first().map(|embed| embed.url.clone().unwrap()).unwrap_or_default()
     ))]
-    pub async fn tag_save_for_later_reactions(
-        &self,
-        message: &mut Message,
-        emoji_char: char,
-    ) {
+    pub async fn tag_save_for_later_reactions(&self, message: &mut Message, emoji_char: char) {
         let save_for_later_reaction = ReactionType::from(emoji_char);
 
-        if Self::has_no_user_emoji_reaction(message, &emoji_char.to_string()) { return }
+        if Self::has_no_user_emoji_reaction(message, &emoji_char.to_string()) {
+            return;
+        }
 
         let saved_for_later_user_ids: Vec<String> = message
-            .reaction_users(
-                &self.client.http,
-                save_for_later_reaction,
-                None,
-                None,
-            )
+            .reaction_users(&self.client.http, save_for_later_reaction, None, None)
             .await
             .map(|users| {
                 users
@@ -310,7 +307,9 @@ impl DiscordAPI {
         let mut users_votes: [Vec<User>; 5] = [vec![], vec![], vec![], vec![], vec![]];
 
         for (index, voting_emoji) in vote_emojis.iter().enumerate() {
-            if Self::has_no_user_votes(event_message, voting_emoji) { continue; }
+            if Self::has_no_user_votes(event_message, voting_emoji) {
+                continue;
+            }
 
             let users_that_reacted: Vec<User> = event_message
                 .reaction_users(
@@ -343,21 +342,36 @@ impl DiscordAPI {
     }
 
     fn has_no_user_votes(event_message: &Message, voting_emoji: &EmojiConfig) -> bool {
-        let reaction = event_message.reactions.iter().find(|reaction| if let Custom { id, .. } = reaction.reaction_type { id == voting_emoji.id } else { false });
+        let reaction = event_message.reactions.iter().find(|reaction| {
+            if let Custom { id, .. } = reaction.reaction_type {
+                id == voting_emoji.id
+            } else {
+                false
+            }
+        });
 
         if let Some(reaction) = reaction {
-           Self::has_no_user_reactions(reaction)
+            Self::has_no_user_reactions(reaction)
         } else {
-            warn!("Message does not have reaction emoji '{}'!", voting_emoji.name);
+            warn!(
+                "Message does not have reaction emoji '{}'!",
+                voting_emoji.name
+            );
             false
         }
     }
 
     fn has_no_user_emoji_reaction(event_message: &Message, emoji_char: &str) -> bool {
-        let reaction = event_message.reactions.iter().find(|reaction| if let Unicode(char) = &reaction.reaction_type { *char == emoji_char } else { false });
+        let reaction = event_message.reactions.iter().find(|reaction| {
+            if let Unicode(char) = &reaction.reaction_type {
+                *char == emoji_char
+            } else {
+                false
+            }
+        });
 
         if let Some(reaction) = reaction {
-             Self::has_no_user_reactions(reaction)
+            Self::has_no_user_reactions(reaction)
         } else {
             warn!("Message does not have saved for later emoji!");
             false
@@ -368,7 +382,7 @@ impl DiscordAPI {
         if reaction.count == 1 {
             // No one has voted
             if reaction.me {
-                return true
+                return true;
             } else {
                 warn!("Self did not react!")
             }
@@ -645,7 +659,8 @@ mod tests {
 
     #[test_log::test]
     fn when_no_user_has_voted_other_than_bot_should_return_true() {
-        let reaction = serde_json::from_str(r#"
+        let reaction = serde_json::from_str(
+            r#"
         {
           "count": 1,
           "count_details": {
@@ -657,15 +672,18 @@ mod tests {
           "emoji": { "id": null, "name": "1" },
           "burst_colors": []
         }
-        "#).unwrap();
+        "#,
+        )
+        .unwrap();
         let has_no_user_reactions = DiscordAPI::has_no_user_reactions(&reaction);
 
-        assert_eq!(has_no_user_reactions, true);
+        assert!(has_no_user_reactions);
     }
 
     #[test_log::test]
     fn when_at_least_one_user_has_voted_other_than_bot_should_return_false() {
-        let reaction = serde_json::from_str(r#"
+        let reaction = serde_json::from_str(
+            r#"
         {
           "count": 2,
           "count_details": {
@@ -677,15 +695,18 @@ mod tests {
           "emoji": { "id": null, "name": "1" },
           "burst_colors": []
         }
-        "#).unwrap();
+        "#,
+        )
+        .unwrap();
         let has_no_user_reactions = DiscordAPI::has_no_user_reactions(&reaction);
 
-        assert_eq!(has_no_user_reactions, false);
+        assert!(!has_no_user_reactions);
     }
 
     #[test_log::test]
     fn when_one_user_has_voted_and_the_bot_has_not_should_return_false() {
-        let reaction = serde_json::from_str(r#"
+        let reaction = serde_json::from_str(
+            r#"
         {
           "count": 1,
           "count_details": {
@@ -697,10 +718,12 @@ mod tests {
           "emoji": { "id": null, "name": "1" },
           "burst_colors": []
         }
-        "#).unwrap();
+        "#,
+        )
+        .unwrap();
         let has_no_user_reactions = DiscordAPI::has_no_user_reactions(&reaction);
 
-        assert_eq!(has_no_user_reactions, false);
+        assert!(!has_no_user_reactions);
     }
 }
 
