@@ -6,9 +6,9 @@ use itertools::Itertools;
 use lazy_static::lazy_static;
 use regex::Regex;
 use serenity::all::{
-    AutoArchiveDuration, ChannelType, Colour, CreateEmbedAuthor, CreateThread, CurrentUser,
-    EditThread, Embed, GatewayIntents, GetMessages, GuildChannel, Message, MessageId, PartialGuild,
-    PrivateChannel, ReactionType, User,
+    AutoArchiveDuration, ChannelType, Colour, CreateEmbedAuthor, CreateThread,
+    CurrentUser, EditThread, Embed, GatewayIntents, GetMessages, GuildChannel,
+    Message, MessageId, PartialGuild, PrivateChannel, ReactionType, User,
 };
 use serenity::builder::{CreateEmbed, CreateMessage, EditMessage};
 use serenity::cache::Settings;
@@ -315,13 +315,6 @@ impl DiscordAPI {
         vote_emojis: &[EmojiConfig; 5],
     ) -> [Vec<User>; 5] {
         let mut users_votes: [Vec<User>; 5] = [vec![], vec![], vec![], vec![], vec![]];
-        let own_user = self
-            .client
-            .http
-            .get_current_user()
-            .await
-            .map(|user| user.id)
-            .unwrap_or_default();
 
         for (index, voting_emoji) in vote_emojis.iter().enumerate() {
             let users_that_reacted: Vec<User> = event_message
@@ -343,7 +336,7 @@ impl DiscordAPI {
                 .expect("Couldn't get users that reacted!");
 
             for user in users_that_reacted {
-                if user.id == own_user {
+                if user.id == self.own_user.id {
                     continue;
                 }
 
