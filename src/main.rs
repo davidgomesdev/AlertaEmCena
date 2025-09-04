@@ -74,6 +74,8 @@ async fn run(config: &Config, discord: &DiscordAPI, category: Category, channel_
         &config.voting_emojis,
     )
     .await;
+
+    info!("Finished for {}", category);
 }
 
 #[instrument(skip(discord, threads, vote_emojis))]
