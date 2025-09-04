@@ -89,8 +89,8 @@ async fn handle_reaction_features(
             .expect("Failed to get messages");
 
         info!(
-            "Tagging save for later and sending votes in DM (on thread '{}')",
-            thread.name
+            "Tagging save for later and sending votes in DM (on thread '{}' with {} messages)",
+            thread.name, messages.len()
         );
 
         for mut message in messages {

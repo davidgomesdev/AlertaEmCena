@@ -4,7 +4,7 @@ mod discord {
     use chrono::NaiveDate;
     use helpers::*;
     use lazy_static::lazy_static;
-    use serenity::all::{ChannelId, GuildChannel};
+    use serenity::all::{ChannelId, GuildChannel, ReactionType};
     use std::env;
     use std::time::Duration;
 
@@ -22,13 +22,13 @@ mod discord {
     #[test_log::test(tokio::test)]
     async fn should_send_event() {
         let api = build_api().await;
-        send_random_event(&api).await;
+        send_random_event(&api, "should_send_event").await;
     }
 
     #[test_log::test(tokio::test)]
     async fn should_add_reaction_to_event() {
         let api = build_api_without_cache().await;
-        let (_, _, message) = send_random_event(&api).await;
+        let (_, _, message) = send_random_event(&api, "should_add_reaction_to_event").await;
 
         api.add_reaction_to_message(&message, *SAVE_FOR_LATER_EMOJI)
             .await;
@@ -37,7 +37,7 @@ mod discord {
     #[test_log::test(tokio::test)]
     async fn should_read_events() {
         let api = build_api().await;
-        let (thread_id, link, _) = send_random_event(&api).await;
+        let (thread_id, link, _) = send_random_event(&api, "should_read_events").await;
 
         let size = api
             .get_event_urls_sent(thread_id)
@@ -53,7 +53,7 @@ mod discord {
     #[test_log::test(tokio::test)]
     async fn should_read_event_sent() {
         let api = build_api().await;
-        let (thread_id, link, _) = send_random_event(&api).await;
+        let (thread_id, link, _) = send_random_event(&api, "should_read_event_sent").await;
 
         let is_event_sent = api.get_event_urls_sent(thread_id).await.contains(&link);
 
@@ -63,7 +63,8 @@ mod discord {
     #[test_log::test(tokio::test)]
     async fn when_an_event_is_deleted_should_not_read_afterwards() {
         let api = build_api().await;
-        let (thread_id, link, message) = send_random_event(&api).await;
+        let (thread_id, link, message) =
+            send_random_event(&api, "when_an_event_is_deleted_should_not_read_afterwards").await;
 
         message
             .delete(&api.client.http)
@@ -78,7 +79,11 @@ mod discord {
     #[test_log::test(tokio::test)]
     async fn when_someone_reacts_with_save_later_should_add_that_person_to_message() {
         let api = build_api().await;
-        let (thread_id, link, mut message) = send_random_event(&api).await;
+        let (thread_id, link, mut message) = send_random_event(
+            &api,
+            "when_someone_reacts_with_save_later_should_add_that_person_to_message",
+        )
+        .await;
         api.add_reaction_to_message(&message, *SAVE_FOR_LATER_EMOJI)
             .await;
 
@@ -119,7 +124,11 @@ mod discord {
     async fn when_someone_removes_save_for_later_react_should_add_remove_that_person_from_the_message(
     ) {
         let api = build_api().await;
-        let (thread_id, _, mut message) = send_random_event(&api).await;
+        let (thread_id, _, mut message) =
+            send_random_event(
+                &api,
+                "when_someone_removes_save_for_later_react_should_add_remove_that_person_from_the_message"
+            ).await;
 
         api.add_reaction_to_message(&message, *SAVE_FOR_LATER_EMOJI)
             .await;
@@ -129,11 +138,23 @@ mod discord {
         tester_api
             .add_reaction_to_message(&message, *SAVE_FOR_LATER_EMOJI)
             .await;
+
         api.tag_save_for_later_reactions(&mut message, *SAVE_FOR_LATER_EMOJI)
             .await;
 
-        message
-            .delete_reaction_emoji(&tester_api.client.http, *SAVE_FOR_LATER_EMOJI)
+        tester_api
+            .client
+            .http
+            .delete_reaction_me(
+                message.channel_id,
+                message.id,
+                &ReactionType::Unicode(SAVE_FOR_LATER_EMOJI.to_string()),
+            )
+            .await
+            .unwrap();
+
+        message = thread_id
+            .message(&api.client.http, message.id)
             .await
             .unwrap();
         api.tag_save_for_later_reactions(&mut message, *SAVE_FOR_LATER_EMOJI)
@@ -156,7 +177,8 @@ mod discord {
     #[test_log::test(tokio::test)]
     async fn should_send_the_voted_event_message_via_dm_only_once() {
         let api = build_api().await;
-        let (_, _, message) = send_random_event(&api).await;
+        let (_, _, message) =
+            send_random_event(&api, "should_send_the_voted_event_message_via_dm_only_once").await;
 
         let voting_emojis = load_voting_emojis_config("VOTING_EMOJIS");
 
@@ -259,7 +281,7 @@ mod discord {
         async fn api_should_filter_sent_events() {
             let api = build_api().await;
             let original_date = NaiveDate::from_ymd_opt(2023, 1, 1).unwrap();
-            let random_event = generate_random_event();
+            let random_event = generate_random_event("api_should_filter_sent_events");
             let link = random_event.0;
             let events: BTreeMap<NaiveDate, Vec<Event>> =
                 BTreeMap::from([(original_date, Vec::from([random_event.1.clone()]))]);
@@ -330,8 +352,11 @@ mod discord {
             static ref INIT: OnceCell<i32> = OnceCell::new();
         }
 
-        pub async fn send_random_event(api: &DiscordAPI) -> (ChannelId, String, Message) {
-            let (link, unique_event, date) = generate_random_event();
+        pub async fn send_random_event(
+            api: &DiscordAPI,
+            test_name: &str,
+        ) -> (ChannelId, String, Message) {
+            let (link, unique_event, date) = generate_random_event(test_name);
             let (thread, message) = send_event(api, unique_event, date).await;
 
             (thread.thread_id, link, message)
@@ -351,7 +376,7 @@ mod discord {
             (thread, message)
         }
 
-        pub fn generate_random_event() -> (String, Event, NaiveDate) {
+        pub fn generate_random_event(test_name: &str) -> (String, Event, NaiveDate) {
             let test_id = Uuid::new_v4();
             let link = format!(
                 "https://example.com/events/barca_inferno?test_id={}",
@@ -359,7 +384,7 @@ mod discord {
             );
             let date = NaiveDate::from_ymd_opt(2024, 9, 1).unwrap();
             let unique_event = Event {
-                title: "O Auto da Barca do Inferno".to_string(),
+                title: format!("O Auto da Barca do Inferno - {}", test_name),
                 details: EventDetails {
                     subtitle: "Uma peça de Gil Vicente".to_string(),
                     description:
@@ -381,7 +406,7 @@ mod discord {
         }
 
         pub async fn build_api() -> DiscordAPI {
-            let api = DiscordAPI::new(&token, true).await;
+            let api = DiscordAPI::new(&token, false).await;
 
             let _ = INIT
                 .get_or_init(|| async {

@@ -163,7 +163,7 @@ impl DiscordAPI {
             .await
         {
             Ok(_) => {
-                trace!("Successfully added '{}' reaction", emoji.name);
+                debug!("Successfully added '{}' reaction", emoji.name);
             }
             Err(err) => {
                 error!(
@@ -202,7 +202,13 @@ impl DiscordAPI {
     pub async fn tag_save_for_later_reactions(&self, message: &mut Message, emoji_char: char) {
         let save_for_later_reaction = ReactionType::from(emoji_char);
 
-        if Self::has_no_user_emoji_reaction(message, &emoji_char.to_string()) {
+        // Is empty ensures no one has ever saved for later,
+        //      message is fresh (no need to remove mentions)
+        // Helps avoid calling the API for reaction_users, improving performance
+        if message.content.is_empty()
+            && Self::has_no_user_emoji_reaction(message, &emoji_char.to_string())
+        {
+            debug!("No user has ever saved for later");
             return;
         }
 
