@@ -208,7 +208,7 @@ impl DiscordAPI {
         if message.content.is_empty()
             && Self::has_no_user_emoji_reaction(message, &emoji_char.to_string())
         {
-            debug!("No user has ever saved for later");
+            trace!("No user has ever saved for later");
             return;
         }
 
