@@ -12,12 +12,13 @@ use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::ops::Add;
 use std::time::Duration;
-use tracing::{error, info, trace, warn};
+use tracing::{debug, error, info, instrument, trace, warn};
 use voca_rs::strip::strip_tags;
 
 const AGENDA_EVENTS_URL: &str = "https://www.agendalx.pt/wp-json/agendalx/v1/events";
 const AGENDA_PAGE_BY_ID_PATH: &str = "https://www.agendalx.pt/?p=";
 const EVENT_TYPE: &str = "event";
+const DATE_PRINT_FORMAT: &str = "%Y-%m-%d";
 
 lazy_static! {
     static ref REST_CLIENT: ClientWithMiddleware = ClientBuilder::new(Client::new())
@@ -75,10 +76,16 @@ impl AgendaCulturalAPI {
         }
     }
 
+    #[instrument(skip_all)]
     async fn parse_events_by_date(response: Vec<EventResponse>) -> BTreeMap<NaiveDate, Vec<Event>> {
         let mut events_by_date: BTreeMap<NaiveDate, Vec<Event>> = BTreeMap::new();
 
         Self::fill_incoming_months(&response, &mut events_by_date);
+
+        debug!(
+            "Found these months of events: {:?}",
+            events_by_date.keys().cloned().collect::<Vec<NaiveDate>>()
+        );
 
         for response in response
             .iter()
@@ -91,6 +98,8 @@ impl AgendaCulturalAPI {
                 events.push(model);
             } else {
                 warn!(
+                    event = model.link,
+                    date = date.format(DATE_PRINT_FORMAT).to_string(),
                     "The date of event '{}' was not in the list! (when it should)",
                     model.title
                 );
@@ -101,6 +110,7 @@ impl AgendaCulturalAPI {
         events_by_date
     }
 
+    #[instrument(skip_all)]
     fn fill_incoming_months(
         response: &[EventResponse],
         events_by_date: &mut BTreeMap<NaiveDate, Vec<Event>>,
@@ -110,7 +120,7 @@ impl AgendaCulturalAPI {
             .max_by(|first, second| first.start_date.cmp(&second.start_date));
 
         if let Some(last_event) = max_month {
-            let date = NaiveDate::from_ymd_opt(
+            let max_date = NaiveDate::from_ymd_opt(
                 last_event.start_date.year(),
                 last_event.start_date.month(),
                 1,
@@ -118,13 +128,19 @@ impl AgendaCulturalAPI {
             .unwrap();
             let mut min_date = Utc::now().date_naive().with_day(1).unwrap();
 
-            while min_date.cmp(&date) != Ordering::Greater {
+            trace!("Filling up until {:?}", max_date);
+            while min_date.cmp(&max_date) != Ordering::Greater {
                 events_by_date.insert(min_date, Vec::from([]));
-                min_date = min_date.add(TimeDelta::days(31));
+                trace!("Going for {:?}", min_date);
+                min_date = min_date
+                    .add(TimeDelta::days(31))
+                    .with_day(1)
+                    .expect("Huh failed adding up months");
             }
         }
     }
 
+    #[instrument(skip(response), fields(event = %response.link))]
     async fn convert_response_to_model(response: &EventResponse) -> Event {
         let description = Self::get_full_description(&response.link)
             .await
@@ -263,7 +279,10 @@ impl AgendaCulturalAPI {
     }
 
     fn clean_description(description: &str) -> String {
-        strip_tags(description).replace("&nbsp;", " ").trim_end_matches("\n").to_owned()
+        strip_tags(description)
+            .replace("&nbsp;", " ")
+            .trim_end_matches("\n")
+            .to_owned()
     }
 }
 
