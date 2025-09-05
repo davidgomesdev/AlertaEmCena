@@ -10,6 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       code: ${{ steps.filter.outputs.code }}
+      workflows: ${{ steps.filter.outputs.workflows }}
     steps:
     - uses: actions/checkout@v3
 
@@ -17,6 +18,8 @@ jobs:
       id: filter
       with:
         filters: |
+          workflows:
+            - '.github/workflows/**'
           code:
             - 'src/**'
             - 'Cargo.lock'
@@ -26,7 +29,7 @@ jobs:
   check-and-test:
     runs-on: ubuntu-latest
     needs: detect-changes
-    if: ${{ needs.detect-changes.outputs.code == 'true' }}
+    if: ${{ needs.detect-changes.outputs.code == 'true' || needs.detect-changes.outputs.workflows == 'true'}}
     env:
       CARGO_TERM_COLOR: always
     defaults:
@@ -37,18 +40,20 @@ jobs:
     - uses: rui314/setup-mold@v1
 
     - uses: actions/checkout@v3
-    
+
+    - uses: Swatinem/rust-cache@v2
+
     - name: 🧯 - Check for compile errors
-      run: cargo check -q
-    
+      run: cargo check
+
     - name: 🧐 - Lint check
       run: cargo clippy -- -D warnings
 
     - name: 🔨 - Build
-      run: cargo build -q
+      run: cargo build
 
     - name: 🧪 - Run tests
-      run: cargo test -q --no-fail-fast
+      run: cargo test --no-fail-fast
       env:
         DISCORD_CHANNEL_ID: ${{ secrets.DISCORD_CHANNEL_ID }}
         DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
