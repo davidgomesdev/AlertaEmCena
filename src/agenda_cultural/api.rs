@@ -33,7 +33,7 @@ lazy_static! {
     ))
     .unwrap();
     static ref EVENT_DESCRIPTION_SELECTOR: Selector =
-        Selector::parse(".entry-container > :not([class])").unwrap();
+        Selector::parse(".entry-container > :not(.event__extra-info):not(.section-title):not(.section-title--venue):not(.venue):not(.post__share)").unwrap();
 }
 
 pub struct AgendaCulturalAPI;
