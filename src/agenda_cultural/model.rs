@@ -1,3 +1,5 @@
+use strum::Display;
+
 const CHILDREN_TAG: &str = "crianças";
 
 #[allow(dead_code)]
@@ -65,7 +67,7 @@ impl Schedule {
     }
 }
 
-#[derive(strum::IntoStaticStr, Debug)]
+#[derive(strum::IntoStaticStr, Debug, Display)]
 pub enum Category {
     Teatro,
     Artes,
