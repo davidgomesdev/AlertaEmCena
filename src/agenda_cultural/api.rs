@@ -254,7 +254,6 @@ impl AgendaCulturalAPI {
             .collect::<Vec<String>>();
 
         if description_elements.is_empty() {
-            warn!("Not able to find description in page");
             return None;
         }
 
