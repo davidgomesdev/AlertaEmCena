@@ -146,6 +146,11 @@ async fn send_new_events(
         for event in events {
             let message = discord.send_event(thread.thread_id, event).await;
 
+            if debug_config.skip_feature_reactions {
+                info!("Skipping feature reactions");
+                continue
+            }
+
             add_feature_reactions(discord, &message, emojis, *SAVE_FOR_LATER_EMOJI).await;
         }
     }
