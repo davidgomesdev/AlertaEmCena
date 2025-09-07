@@ -19,6 +19,7 @@ use serenity::prelude::SerenityError;
 use serenity::Client;
 use std::env;
 use std::fmt::Debug;
+use mockall::automock;
 use tracing::field::debug;
 use tracing::{debug, error, info, instrument, trace, warn};
 
@@ -40,10 +41,13 @@ const PORTUGUESE_MONTHS: [&str; 12] = [
 ];
 
 const CHILDREN_LABEL: &str = "🧸 para crianças";
+const COMMENT_APPLIED_REACTION: char = '✅';
 
 lazy_static! {
     static ref USER_MENTION_REGEX: Regex =
         Regex::new("<@(\\d+)>").expect("Failed to create mention regex");
+
+    static ref COMMENT_IN_USER_REVIEW_REGEX: Regex = Regex::new(r"\*\*Comentários:\*\*.*").unwrap();
 }
 
 pub struct DiscordAPI {
@@ -51,16 +55,17 @@ pub struct DiscordAPI {
     pub own_user: CurrentUser,
 }
 
+#[automock]
 impl DiscordAPI {
     pub async fn default() -> Self {
-        DiscordAPI::new(
+        DiscordAPI::new_with_token(
             &env::var("DISCORD_TOKEN").expect("DISCORD_TOKEN not set"),
             true,
         )
         .await
     }
 
-    pub async fn new(token: &str, cache_flag: bool) -> Self {
+    pub async fn new_with_token(token: &str, cache_flag: bool) -> Self {
         let intents = GatewayIntents::GUILD_MESSAGES
             | GatewayIntents::MESSAGE_CONTENT
             | GatewayIntents::GUILD_MESSAGE_REACTIONS;
@@ -188,12 +193,8 @@ impl DiscordAPI {
             .react(&self.client.http, ReactionType::from(emoji_char))
             .await;
 
-        if let Err(e) = react_result {
-            let msg = &format!("Failed to add reaction {} to message", emoji_char);
-            error!(
-                msg,
-                error = %e
-            );
+        if let Err(error) = react_result {
+            error!("Failed to add reaction {} to message. Error: {:?}", emoji_char, error);
         }
     }
 
@@ -285,6 +286,66 @@ impl DiscordAPI {
         }
     }
 
+    #[instrument(skip_all)]
+    pub async fn add_reply_comments_on_dms(&self) {
+        let dms = self
+            .client
+            .http
+            .get_user_dm_channels()
+            .await
+            .expect("Failed to get DM channels");
+
+        for dm in dms {
+            let messages: Vec<Message> = dm
+                .messages(&self.client.http, GetMessages::new())
+                .await
+                .expect("Failed to get messages")
+                .into_iter()
+                .filter(|msg| self.is_message_reply_to_own(msg))
+                .collect();
+
+            debug!("Found {} review edit messages", messages.len());
+
+            for msg in messages {
+                let mut referenced_msg = msg.referenced_message.clone().unwrap();
+
+                if referenced_msg.embeds.is_empty() {
+                    warn!("Referenced message is not a review (does not have an embed)");
+                    continue
+                }
+
+                self.edit_user_review_comment(&msg, &mut referenced_msg).await;
+
+                info!("Edited user review with new comment");
+            }
+        }
+    }
+
+    #[instrument(skip_all)]
+    async fn edit_user_review_comment(&self, msg: &Message, referenced_msg: &mut Message) {
+        let new_comment = msg.content.as_str();
+        let embed = referenced_msg.embeds.first().unwrap().to_owned();
+
+        debug!(event = embed.url, "Editing user review comment");
+
+        let embed_edit = Self::edit_event_embed_comment(embed, &new_comment);
+
+        let edit_embed_result = referenced_msg
+            .edit(&self.client.http, EditMessage::new().embed(embed_edit))
+            .await;
+
+        if let Err(error) = edit_embed_result
+        {
+            error!("Failed editing review to new comment. Error: {:?}", error);
+        }
+
+        self.add_reaction_to_message(&msg, COMMENT_APPLIED_REACTION)
+            .await;
+
+        info!(comment = new_comment, "Edited user review with new comment");
+    }
+
+    // TODO: instrument
     async fn send_user_review(
         &self,
         user: &User,
@@ -310,6 +371,13 @@ impl DiscordAPI {
                 );
             }
         }
+    }
+
+    // TODO: unit test this
+    fn is_message_reply_to_own(&self, msg: &Message) -> bool {
+        msg.author != *self.own_user
+            && msg.referenced_message.is_some()
+            && msg.referenced_message.clone().unwrap().author == *self.own_user
     }
 
     async fn get_user_votes(
@@ -422,7 +490,8 @@ impl DiscordAPI {
             .expect("Failed to send message");
 
         if let Some(comment) = comment {
-            self.add_reaction_to_message(&comment, '✅').await;
+            self.add_reaction_to_message(&comment, COMMENT_APPLIED_REACTION)
+                .await;
         }
     }
 
@@ -446,6 +515,21 @@ impl DiscordAPI {
                 comment.content
             )),
         }
+    }
+
+    #[instrument(skip(event_embed), fields(event_name = %event_embed.title.clone().unwrap_or_default()))]
+    fn edit_event_embed_comment(event_embed: Embed, comment: &str) -> CreateEmbed {
+        if event_embed.description == None {
+            warn!("Event review does not have a description!");
+        }
+
+        let original_description = event_embed.description.clone().unwrap();
+        let new_description = COMMENT_IN_USER_REVIEW_REGEX.replace(
+            &original_description,
+            format!("**Comentários: {}**", comment),
+        );
+
+        CreateEmbed::from(event_embed).description(new_description)
     }
 
     #[instrument(skip(self, dm), fields(user_name = %dm.recipient.name.to_string()))]
