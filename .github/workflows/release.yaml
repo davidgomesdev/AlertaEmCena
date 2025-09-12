@@ -47,8 +47,6 @@ jobs:
         rustup default stable
         rustup override set stable
 
-    - uses: Swatinem/rust-cache@v2
-
     - name: 🌱 - Install dependencies
       run: cargo install cross --git https://github.com/cross-rs/cross
 
