@@ -35,3 +35,5 @@ serenity = "0.12.4"
 uuid = { version = "1.11.1", features = ["v4"] }
 chrono = "0.4.40"
 itertools = "0.14.0"
+mockall = "0.13.1"
+mockall_double = "0.3.1"

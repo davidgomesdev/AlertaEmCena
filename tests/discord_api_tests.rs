@@ -406,7 +406,7 @@ mod discord {
         }
 
         pub async fn build_api() -> DiscordAPI {
-            let api = DiscordAPI::new(&token, false).await;
+            let api = DiscordAPI::new_with_token(&token, false).await;
 
             let _ = INIT
                 .get_or_init(|| async {
@@ -419,7 +419,7 @@ mod discord {
         }
 
         pub async fn build_api_without_cache() -> DiscordAPI {
-            let api = DiscordAPI::new(&token, false).await;
+            let api = DiscordAPI::new_with_token(&token, false).await;
 
             let _ = INIT
                 .get_or_init(|| async {
@@ -445,7 +445,7 @@ mod discord {
         }
 
         pub async fn build_tester_api() -> DiscordAPI {
-            DiscordAPI::new(&tester_token, false).await
+            DiscordAPI::new_with_token(&tester_token, false).await
         }
     }
 }
