@@ -67,6 +67,8 @@ async fn run(config: &Config, discord: &DiscordAPI, category: Category, channel_
 
     let new_events = filter_new_events_by_thread(discord, &guild, events, channel_id).await;
 
+    info!("Filtered new events");
+
     send_new_events(
         discord,
         new_events,
@@ -75,7 +77,7 @@ async fn run(config: &Config, discord: &DiscordAPI, category: Category, channel_
     )
     .await;
 
-    info!("Finished for {}", category);
+    info!("Finished sending new events for {}", category);
 }
 
 #[instrument(skip(discord, threads, vote_emojis))]
