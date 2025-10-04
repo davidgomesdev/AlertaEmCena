@@ -4,18 +4,23 @@ use crate::discord::api::{DiscordAPI, EventsThread};
 use chrono::NaiveDate;
 use serenity::all::{ChannelId, GuildChannel, Message, PartialGuild};
 use std::collections::BTreeMap;
-use tracing::info;
+use tracing::{info, instrument, trace};
 
+#[instrument(skip_all)]
 pub async fn filter_new_events_by_thread(
     discord: &DiscordAPI,
     guild: &PartialGuild,
     events_by_month: BTreeMap<NaiveDate, Vec<Event>>,
     channel_id: ChannelId,
 ) -> BTreeMap<EventsThread, Vec<Event>> {
+    trace!("Getting threads");
     let threads = discord.get_channel_threads(guild, channel_id).await;
 
+    trace!("Sorting threads by month");
     let threads_by_month =
         get_threads_by_month(discord, channel_id, &events_by_month, &threads).await;
+
+    trace!("Getting sent events");
     let sent_events = get_sent_events(discord, &threads).await;
 
     threads_by_month

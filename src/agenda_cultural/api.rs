@@ -107,6 +107,8 @@ impl AgendaCulturalAPI {
             }
         }
 
+        info!("Parsed events");
+
         events_by_date
     }
 
