@@ -531,13 +531,15 @@ impl DiscordAPI {
             .unwrap()
     }
 
-    #[instrument(skip(self, guild, channel_id), fields(guild_id = %guild.id.to_string(), channel_id = %channel_id.to_string()))]
+    #[instrument(skip_all, fields(guild_id = %guild.id.to_string(), channel_id = %channel_id.to_string()))]
     pub async fn get_channel_threads(
         &self,
         guild: &PartialGuild,
         channel_id: ChannelId,
     ) -> Vec<GuildChannel> {
         self.unarchive_archived_threads(channel_id).await;
+
+        debug("Unarchived archived threads");
 
         let active_threads: Vec<GuildChannel> = guild
             .get_active_threads(&self.client.http)
@@ -574,8 +576,6 @@ impl DiscordAPI {
                 .await
                 .expect("Failed to unarchive archived threads!")
         }
-
-        debug("Unarchived archived threads");
     }
 
     fn concat_thread_names(threads: &[GuildChannel]) -> String {
