@@ -17,36 +17,43 @@ lazy_static! {
 
 #[tokio::main]
 async fn main() {
-    let _shutdown_hook = ShutdownHook;
+    let loki_controller = setup_loki().await;
 
-    setup_loki().await;
+    {
+        let _shutdown_hook = ShutdownHook;
 
-    let config = load_config();
+        let config = load_config();
 
-    debug!("Loaded {:?}", config);
+        debug!("Loaded {:?}", config);
 
-    let discord = DiscordAPI::default().await;
+        let discord = DiscordAPI::default().await;
 
-    if config.debug_config.clear_channel {
-        discord.delete_all_messages(&config.teatro_channel_id).await;
-        discord.delete_all_messages(&config.artes_channel_id).await;
+        if config.debug_config.clear_channel {
+            discord.delete_all_messages(&config.teatro_channel_id).await;
+            discord.delete_all_messages(&config.artes_channel_id).await;
 
-        if config.debug_config.exit_after_clearing {
-            exit(0)
+            if config.debug_config.exit_after_clearing {
+                exit(0)
+            }
         }
+
+        if !config.debug_config.skip_artes {
+            run(&config, &discord, Category::Artes, config.artes_channel_id).await;
+        }
+
+        run(
+            &config,
+            &discord,
+            Category::Teatro,
+            config.teatro_channel_id,
+        )
+            .await;
     }
 
-    if !config.debug_config.skip_artes {
-        run(&config, &discord, Category::Artes, config.artes_channel_id).await;
+    if let Some((controller, join_handle)) = loki_controller {
+        controller.shutdown().await;
+        join_handle.await.expect("Failed joining Loki task");
     }
-
-    run(
-        &config,
-        &discord,
-        Category::Teatro,
-        config.teatro_channel_id,
-    )
-    .await;
 }
 
 async fn run(config: &Config, discord: &DiscordAPI, category: Category, channel_id: ChannelId) {
@@ -56,6 +63,8 @@ async fn run(config: &Config, discord: &DiscordAPI, category: Category, channel_
     if !config.debug_config.skip_feature_reactions {
         handle_reaction_features(discord, threads, &config.voting_emojis).await;
     }
+
+    info!("Handled reaction features");
 
     let events = AgendaCulturalAPI::get_events_by_month(&category, config.debug_config.event_limit)
         .await
