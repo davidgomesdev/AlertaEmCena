@@ -1,8 +1,9 @@
 use lazy_static::lazy_static;
 use std::{env, io};
+use tokio::task::JoinHandle;
 use tracing::{info, warn, Level};
 use tracing_loki::url::Url;
-use tracing_loki::BackgroundTask;
+use tracing_loki::{BackgroundTask, BackgroundTaskController};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::{filter, fmt};
@@ -11,18 +12,21 @@ lazy_static! {
     static ref LOKI_URL: Option<String> = env::var("LOKI_URL").ok();
 }
 
-fn build_loki_layer(base_url: Url) -> (tracing_loki::Layer, BackgroundTask) {
-    tracing_loki::layer(
-        base_url,
-        vec![("service".into(), "alertaemcena".into())]
-            .into_iter()
-            .collect(),
-        vec![].into_iter().collect(),
-    )
-    .unwrap()
+fn build_loki_layer(
+    base_url: Url,
+) -> (
+    tracing_loki::Layer,
+    BackgroundTaskController,
+    BackgroundTask,
+) {
+    tracing_loki::builder()
+        .label("service", "alertaemcena")
+        .expect("Failed setting label")
+        .build_controller_url(base_url)
+        .unwrap()
 }
 
-pub async fn setup_loki() {
+pub async fn setup_loki() -> Option<(BackgroundTaskController, JoinHandle<()>)> {
     let filter = filter::Targets::new()
         .with_target("alertaemcena", Level::TRACE)
         .with_default(Level::WARN);
@@ -41,12 +45,14 @@ pub async fn setup_loki() {
 
             match reqwest::get(base_url.clone()).await {
                 Ok(_) => {
-                    let (layer, task) = build_loki_layer(base_url);
+                    let (layer, controller, task) = build_loki_layer(base_url);
 
                     registry.with(layer).init();
-                    tokio::spawn(task);
+                    let handle = tokio::spawn(task);
 
                     info!("Loki initialized");
+
+                    return Some((controller, handle));
                 }
                 Err(_) => {
                     registry.init();
@@ -55,4 +61,6 @@ pub async fn setup_loki() {
             };
         }
     };
+
+    None
 }
