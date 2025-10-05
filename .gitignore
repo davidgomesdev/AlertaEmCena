@@ -17,3 +17,5 @@ Cargo.lock
 
 example.json
 schema.json
+
+docker/.data
