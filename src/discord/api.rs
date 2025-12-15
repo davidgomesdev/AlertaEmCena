@@ -236,7 +236,8 @@ impl DiscordAPI {
             .join(" ");
         let message_content = format!("Interessados: {}", mentions);
 
-        if message_content == message.content {
+        if message_content.trim() == message.content.trim() {
+            trace!("No new users saved for later");
             return;
         }
 
