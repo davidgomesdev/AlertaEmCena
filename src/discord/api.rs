@@ -243,10 +243,16 @@ impl DiscordAPI {
 
         info!("Saved for later changed to '{}'", mentions);
 
+        let mut edit_message = EditMessage::new().content(message_content);
+
+        if saved_for_later_user_ids.is_empty() {
+            edit_message = edit_message.content("");
+        }
+
         message
             .edit(
                 &self.client.http,
-                EditMessage::new().content(message_content),
+                edit_message,
             )
             .await
             .expect("Failed to edit message!");
