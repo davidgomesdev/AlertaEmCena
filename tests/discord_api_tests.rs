@@ -77,7 +77,7 @@ mod discord {
     }
 
     #[test_log::test(tokio::test)]
-    async fn when_someone_reacts_with_save_later_should_add_that_person_to_message() {
+    async fn when_someone_reacts_with_save_later_should_add_that_person_to_message_and_pin_it() {
         let api = build_api().await;
         let (thread_id, link, mut message) = send_random_event(
             &api,
@@ -118,17 +118,17 @@ mod discord {
 
         assert!(saved_later.contains(tester_api.own_user.id.to_string().as_str()));
         assert!(!saved_later.contains(api.own_user.id.to_string().as_str()));
+        assert!(message.pinned);
     }
 
     #[test_log::test(tokio::test)]
-    async fn when_someone_removes_save_for_later_react_should_emove_that_person_from_the_message(
-    ) {
+    async fn when_someone_removes_save_for_later_react_should_emove_that_person_from_the_message_and_unpin_it() {
         let api = build_api().await;
-        let (thread_id, _, mut message) =
-            send_random_event(
-                &api,
-                "when_someone_removes_save_for_later_react_should_remove_that_person_from_the_message"
-            ).await;
+        let (thread_id, _, mut message) = send_random_event(
+            &api,
+            "when_someone_removes_save_for_later_react_should_remove_that_person_from_the_message",
+        )
+        .await;
 
         api.add_reaction_to_message(&message, *SAVE_FOR_LATER_EMOJI)
             .await;
@@ -171,7 +171,8 @@ mod discord {
 
         assert!(!saved_later.contains(tester_api.own_user.id.to_string().as_str()));
         assert!(!saved_later.contains(api.own_user.id.to_string().as_str()));
-        assert!(saved_later.is_empty())
+        assert!(saved_later.is_empty());
+        assert!(!message.pinned);
     }
 
     #[test_log::test(tokio::test)]

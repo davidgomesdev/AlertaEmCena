@@ -236,6 +236,20 @@ impl DiscordAPI {
             .join(" ");
         let message_content = format!("Interessados: {}", mentions);
 
+        if saved_for_later_user_ids.is_empty() && message.pinned {
+            message
+                .unpin(&self.client.http)
+                .await
+                .expect("Failed to unpin no longer saved for later message!");
+        }
+
+        if !saved_for_later_user_ids.is_empty() && !message.pinned {
+            message
+                .pin(&self.client.http)
+                .await
+                .expect("Failed to pin saved for later message!");
+        }
+
         if message_content.trim() == message.content.trim() {
             trace!("No new users saved for later");
             return;
@@ -250,10 +264,7 @@ impl DiscordAPI {
         }
 
         message
-            .edit(
-                &self.client.http,
-                edit_message,
-            )
+            .edit(&self.client.http, edit_message)
             .await
             .expect("Failed to edit message!");
     }
