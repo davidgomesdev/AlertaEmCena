@@ -122,7 +122,8 @@ mod discord {
     }
 
     #[test_log::test(tokio::test)]
-    async fn when_someone_removes_save_for_later_react_should_emove_that_person_from_the_message_and_unpin_it() {
+    async fn when_someone_removes_save_for_later_react_should_emove_that_person_from_the_message_and_unpin_it(
+    ) {
         let api = build_api().await;
         let (thread_id, _, mut message) = send_random_event(
             &api,
