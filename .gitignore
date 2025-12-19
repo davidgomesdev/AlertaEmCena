@@ -19,3 +19,5 @@ example.json
 schema.json
 
 docker/.data
+
+test-locally.sh
