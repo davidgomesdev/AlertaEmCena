@@ -163,7 +163,6 @@ mod discord {
         let message = tester_api
             .client
             .http
-            .clone()
             .get_message(thread_id, message.id)
             .await
             .unwrap();
