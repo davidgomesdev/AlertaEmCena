@@ -121,13 +121,13 @@ mod discord {
     }
 
     #[test_log::test(tokio::test)]
-    async fn when_someone_removes_save_for_later_react_should_add_remove_that_person_from_the_message(
+    async fn when_someone_removes_save_for_later_react_should_emove_that_person_from_the_message(
     ) {
         let api = build_api().await;
         let (thread_id, _, mut message) =
             send_random_event(
                 &api,
-                "when_someone_removes_save_for_later_react_should_add_remove_that_person_from_the_message"
+                "when_someone_removes_save_for_later_react_should_remove_that_person_from_the_message"
             ).await;
 
         api.add_reaction_to_message(&message, *SAVE_FOR_LATER_EMOJI)
@@ -172,6 +172,7 @@ mod discord {
 
         assert!(!saved_later.contains(tester_api.own_user.id.to_string().as_str()));
         assert!(!saved_later.contains(api.own_user.id.to_string().as_str()));
+        assert!(saved_later.is_empty())
     }
 
     #[test_log::test(tokio::test)]
