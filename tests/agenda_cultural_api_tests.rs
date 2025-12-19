@@ -59,7 +59,9 @@ mod agenda_cultural {
         let event: Event = AgendaCulturalAPI::get_event_by_id(208058).await.unwrap();
 
         assert_eq!(event.title, "Nora Helmer");
-        assert!(event.details.description.starts_with("A história de Nora Helmer, protagonista de Casa de Bonecas, peça de Henrik Ibsen"));
+        assert!(event.details.description.starts_with(
+            "A história de Nora Helmer, protagonista de Casa de Bonecas, peça de Henrik Ibsen"
+        ));
         assert_eq!(event.details.image_url, "https://www.agendalx.pt/content/uploads/2025/02/Nora-Helmer_ensaios2©Filipe_Figueiredo.jpg");
         assert_eq!(
             event.details.subtitle,
@@ -84,8 +86,8 @@ mod agenda_cultural {
         let event: Event = AgendaCulturalAPI::get_event_by_public_url(
             "https://www.agendalx.pt/events/event/o-monte/",
         )
-            .await
-            .unwrap();
+        .await
+        .unwrap();
 
         assert_eq!(event.title, "O Monte");
         assert!(event.details.description.starts_with("A partir de um texto de João Ascenso, O Monte é inspirado no relato da atriz Luísa Ortigoso sobre um ex-preso político que reencontra o seu torturador anos após a ditadura."));
@@ -94,10 +96,7 @@ mod agenda_cultural {
             "https://www.agendalx.pt/content/uploads/2025/03/omonte.jpg"
         );
         assert_eq!(event.details.subtitle, "Teatro Livre");
-        assert_eq!(
-            event.link,
-            "https://www.agendalx.pt/events/event/o-monte/"
-        );
+        assert_eq!(event.link, "https://www.agendalx.pt/events/event/o-monte/");
         assert_eq!(event.occurring_at.dates, "24 abril a 4 maio");
         assert_eq!(
             event.occurring_at.times,
@@ -117,8 +116,8 @@ mod agenda_cultural {
         let event: Event = AgendaCulturalAPI::get_event_by_public_url(
             "https://www.agendalx.pt/events/event/um-sapato-especial/",
         )
-            .await
-            .unwrap();
+        .await
+        .unwrap();
 
         assert_eq!(event.title, "Um sapato especial");
         assert!(event.details.description.starts_with("O Ursinho José gosta muito de ir brincar para o jardim. Joga à bola, às corridas, anda de bicicleta e nos baloiços. E ele é o campeão dos saltos! Mas um dia acontece algo inesperado e começa um"));
@@ -132,16 +131,10 @@ mod agenda_cultural {
             "https://www.agendalx.pt/events/event/um-sapato-especial/"
         );
         assert_eq!(event.occurring_at.dates, "14 junho");
-        assert_eq!(
-            event.occurring_at.times,
-            "16h00"
-        );
+        assert_eq!(event.occurring_at.times, "16h00");
         assert_eq!(event.venue, "Fábrica Braço de Prata");
         assert_eq!(event.tags.len(), 2);
-        assert_eq!(
-            event.tags,
-            ["crianças", "famílias"]
-        );
+        assert_eq!(event.tags, ["crianças", "famílias"]);
         assert!(event.is_for_children);
     }
 }

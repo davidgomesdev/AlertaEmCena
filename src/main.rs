@@ -47,7 +47,7 @@ async fn main() {
             Category::Teatro,
             config.teatro_channel_id,
         )
-            .await;
+        .await;
     }
 
     if let Some((controller, join_handle)) = loki_controller {
@@ -103,7 +103,8 @@ async fn handle_reaction_features(
 
         info!(
             "Tagging save for later and sending votes in DM (on thread '{}' with {} messages)",
-            thread.name, messages.len()
+            thread.name,
+            messages.len()
         );
 
         for mut message in messages {
@@ -164,7 +165,7 @@ async fn send_new_events(
 
             if debug_config.skip_feature_reactions {
                 info!("Skipping feature reactions");
-                continue
+                continue;
             }
 
             add_feature_reactions(discord, &message, emojis, *SAVE_FOR_LATER_EMOJI).await;
