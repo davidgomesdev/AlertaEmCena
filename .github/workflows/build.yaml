@@ -1,9 +1,9 @@
 name: Build
 
 on:
-  push:
-    # On main, it's the build and release that will run
-    branches-ignore: [ "main" ]
+  pull_request:
+    branches:
+      - main
 
 jobs:
   detect-changes:
