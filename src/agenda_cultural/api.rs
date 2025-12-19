@@ -172,7 +172,7 @@ impl AgendaCulturalAPI {
             .inspect_err(|err| {
                 error!(
                     "Failed with status {} source {}",
-                    err.status().unwrap(),
+                    err.status().unwrap_or_default(),
                     err.source().unwrap()
                 )
             })
