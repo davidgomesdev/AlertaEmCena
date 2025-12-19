@@ -8,10 +8,10 @@ use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
 use reqwest_retry::policies::ExponentialBackoff;
 use reqwest_retry::RetryTransientMiddleware;
 use scraper::{Html, Selector};
-use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::ops::Add;
 use std::time::Duration;
+use std::{cmp::Ordering, error::Error};
 use tracing::{debug, error, info, instrument, trace, warn};
 use voca_rs::strip::strip_tags;
 
@@ -169,6 +169,13 @@ impl AgendaCulturalAPI {
             .get(format!("{}/{}", AGENDA_EVENTS_URL, event_id))
             .send()
             .await
+            .inspect_err(|err| {
+                error!(
+                    "Failed with status {} source {}",
+                    err.status().unwrap(),
+                    err.source().unwrap()
+                )
+            })
             .expect("Error sending request")
             .error_for_status()
             .expect("Request failed")

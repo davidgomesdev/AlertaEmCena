@@ -109,7 +109,10 @@ async fn handle_reaction_features(
 
         for mut message in messages {
             if message.author != *discord.own_user {
-                debug!("Ignoring message from a different user {}", message.author.id);
+                debug!(
+                    "Ignoring message from a different user {}",
+                    message.author.id
+                );
                 continue;
             }
 
