@@ -7,6 +7,7 @@ pub struct Config {
     pub teatro_channel_id: ChannelId,
     pub artes_channel_id: ChannelId,
     pub voting_emojis: [EmojiConfig; 5],
+    pub gather_new_events: bool,
 }
 
 #[derive(Debug)]

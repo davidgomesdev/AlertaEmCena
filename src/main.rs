@@ -9,7 +9,7 @@ use lazy_static::lazy_static;
 use serenity::all::{ChannelId, GuildChannel};
 use std::collections::BTreeMap;
 use std::process::exit;
-use tracing::{debug, info, instrument, warn};
+use tracing::{debug, error, info, instrument, warn};
 
 lazy_static! {
     pub static ref SAVE_FOR_LATER_EMOJI: char = '🔖';
@@ -56,6 +56,7 @@ async fn main() {
     }
 }
 
+#[instrument(skip_all, fields(category = %category))]
 async fn run(config: &Config, discord: &DiscordAPI, category: Category, channel_id: ChannelId) {
     let guild = discord.get_guild(channel_id).await;
     let threads = discord.get_channel_threads(&guild, channel_id).await;
@@ -66,12 +67,25 @@ async fn run(config: &Config, discord: &DiscordAPI, category: Category, channel_
 
     info!("Handled reaction features");
 
+    if !config.gather_new_events {
+        info!("Set to not gather new events");
+        return;
+    }
+
     let events = AgendaCulturalAPI::get_events_by_month(&category, config.debug_config.event_limit)
-        .await
-        .unwrap();
+        .await;
+
+    if events.is_err() {
+        let err = events.unwrap_err();
+        error!("Failed getting events. Reason: {:?}", err);
+        return;
+    }
+
+    let events = events.unwrap();
 
     if events.is_empty() {
-        panic!("No events found");
+        error!("No events found");
+        return;
     }
 
     let new_events = filter_new_events_by_thread(discord, &guild, events, channel_id).await;

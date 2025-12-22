@@ -21,3 +21,4 @@ schema.json
 docker/.data
 
 test-locally.sh
+run-locally.sh
