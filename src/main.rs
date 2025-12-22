@@ -56,6 +56,8 @@ async fn main() {
     }
 }
 
+// No way will I match all variants of APIError
+#[allow(clippy::unnecessary_unwrap)]
 #[instrument(skip_all, fields(category = %category))]
 async fn run(config: &Config, discord: &DiscordAPI, category: Category, channel_id: ChannelId) {
     let guild = discord.get_guild(channel_id).await;
