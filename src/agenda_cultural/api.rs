@@ -2,6 +2,7 @@ use super::{dto::EventResponse, model::Event};
 use crate::agenda_cultural::dto::SingleEventResponse;
 use crate::agenda_cultural::model::Category;
 use chrono::{Datelike, NaiveDate, TimeDelta, Utc};
+use futures::TryFutureExt;
 use lazy_static::lazy_static;
 use reqwest::{Client, Response};
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
@@ -11,8 +12,8 @@ use scraper::{Html, Selector};
 use std::collections::BTreeMap;
 use std::ops::Add;
 use std::time::Duration;
-use std::{cmp::Ordering, error::Error};
-use tracing::{debug, error, info, instrument, trace, warn};
+use std::{cmp::Ordering};
+use tracing::{debug, info, instrument, trace, warn};
 use voca_rs::strip::strip_tags;
 
 const AGENDA_EVENTS_URL: &str = "https://www.agendalx.pt/wp-json/agendalx/v1/events";
@@ -59,21 +60,13 @@ impl AgendaCulturalAPI {
         }
 
         let category: &'static str = category.into();
-        let parsed_response = Self::get_events_by_category(amount_per_page, category).await;
+        let parsed_response = Self::get_events_by_category(amount_per_page, category).await?;
 
-        match parsed_response {
-            Ok(parsed_response) => {
-                info!("Fetched {} events", parsed_response.len());
+        info!("Fetched {} events", parsed_response.len());
 
-                let events = Self::parse_events_by_date(parsed_response).await;
+        let events = Self::parse_events_by_date(parsed_response).await;
 
-                Ok(events)
-            }
-            Err(e) => {
-                error!("Response parse failed: {:?}", e);
-                Err(APIError::InvalidResponse)
-            }
-        }
+        Ok(events)
     }
 
     #[instrument(skip_all)]
@@ -137,7 +130,7 @@ impl AgendaCulturalAPI {
                 min_date = min_date
                     .add(TimeDelta::days(31))
                     .with_day(1)
-                    .expect("Huh failed adding up months");
+                    .unwrap();
             }
         }
     }
@@ -169,30 +162,18 @@ impl AgendaCulturalAPI {
             .get(format!("{}/{}", AGENDA_EVENTS_URL, event_id))
             .send()
             .await
-            .inspect_err(|err| {
-                error!(
-                    "Failed with status {} source {}",
-                    err.status().unwrap_or_default(),
-                    err.source().unwrap()
-                )
-            })
-            .expect("Error sending request")
+            .map_err(APIError::ErrorSending)?
             .error_for_status()
-            .expect("Request failed")
+            .map_err(APIError::ResponseError)?
             .text()
-            .await
-            .expect("Received invalid response");
+            .map_err(APIError::InvalidResponse)
+            .await?;
         trace!("Json response: {json_response}");
 
-        let parsed_response = serde_json::from_str::<SingleEventResponse>(&json_response);
+        let parsed_response = serde_json::from_str::<SingleEventResponse>(&json_response)
+            .map_err(APIError::ParseError)?;
 
-        match parsed_response {
-            Ok(dto) => Ok(Self::convert_response_to_model(&dto.event).await),
-            Err(e) => {
-                error!("Response parse failed: {:?}", e);
-                Err(APIError::InvalidResponse)
-            }
-        }
+        Ok(Self::convert_response_to_model(&parsed_response.event).await)
     }
 
     /**
@@ -203,21 +184,27 @@ impl AgendaCulturalAPI {
         let full_page: String = REST_CLIENT
             .get(url)
             .send()
-            .await
-            .expect("Error getting full page")
+            .map_err(APIError::ErrorSending)
+            .await?
+            .error_for_status()
+            .map_err(APIError::ResponseError)?
             .text()
-            .await
-            .expect("Error getting text of page");
+            .map_err(APIError::InvalidResponse)
+            .await?;
         let page_html = Html::parse_fragment(&full_page);
         let id_element = page_html
             .select(&EVENT_ID_SELECTOR)
             .next()
-            .expect("Could not find ID element in page!")
+            .ok_or_else(|| {
+                APIError::FailedParsingHtml("Could not find ID element in page!".to_string())
+            })?
             .attr("href")
             .and_then(|href| href.strip_prefix(AGENDA_PAGE_BY_ID_PATH))
-            .expect("Could not find ID in element!")
+            .ok_or_else(|| {
+                APIError::FailedParsingHtml("Could not find ID in the element!".to_string())
+            })?
             .parse()
-            .expect("Fetched ID is not valid!");
+            .map_err(|_| APIError::FailedParsingHtml("Fetched ID is not valid!".to_string()))?;
 
         Self::get_event_by_id(id_element).await
     }
@@ -226,7 +213,7 @@ impl AgendaCulturalAPI {
     async fn get_events_by_category(
         amount_per_page: Option<i32>,
         category: &str,
-    ) -> serde_json::Result<Vec<EventResponse>> {
+    ) -> Result<Vec<EventResponse>, APIError> {
         let json_response = REST_CLIENT
             .get(format!(
                 "{}?per_page={}&categories={}&type={}",
@@ -236,15 +223,16 @@ impl AgendaCulturalAPI {
                 EVENT_TYPE
             ))
             .send()
-            .await
-            .expect("Error sending request")
+            .map_err(APIError::ErrorSending)
+            .await?
             .error_for_status()
-            .expect("Request failed")
+            .map_err(APIError::ResponseError)?
             .text()
-            .await
-            .expect("Received invalid response");
+            .map_err(APIError::InvalidResponse)
+            .await?;
 
         serde_json::from_str::<Vec<EventResponse>>(&json_response)
+            .map_err(APIError::ParseError)
     }
 
     async fn get_full_description(link: &str) -> Option<String> {
@@ -396,5 +384,9 @@ mod tests {
 
 #[derive(Debug)]
 pub enum APIError {
-    InvalidResponse,
+    ErrorSending(reqwest_middleware::Error),
+    ResponseError(reqwest::Error),
+    InvalidResponse(reqwest::Error),
+    ParseError(serde_json::Error),
+    FailedParsingHtml(String),
 }

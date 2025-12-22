@@ -6,6 +6,7 @@ pub fn load_config() -> Config {
     let teatro_channel_id: ChannelId = load_channel_id_config("DISCORD_TEATRO_CHANNEL_ID");
     let artes_channel_id: ChannelId = load_channel_id_config("DISCORD_ARTES_CHANNEL_ID");
     let voting_emojis: [EmojiConfig; 5] = load_voting_emojis_config("VOTING_EMOJIS");
+    let gather_new_events: bool = load_bool_config("GATHER_NEW_EVENTS", true);
 
     let debug_config = DebugConfig {
         clear_channel: load_bool_config("DEBUG_CLEAR_CHANNEL", false),
@@ -21,6 +22,7 @@ pub fn load_config() -> Config {
         teatro_channel_id,
         artes_channel_id,
         voting_emojis,
+        gather_new_events,
     }
 }
 
