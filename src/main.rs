@@ -6,10 +6,10 @@ use alertaemcena::config::model::{Config, DebugConfig, EmojiConfig};
 use alertaemcena::discord::api::{DiscordAPI, EventsThread};
 use alertaemcena::tracing::setup_loki;
 use lazy_static::lazy_static;
-use serenity::all::{ChannelId, GuildChannel};
+use serenity::all::{ChannelId, GuildChannel, MessageType};
 use std::collections::BTreeMap;
 use std::process::exit;
-use tracing::{debug, error, info, instrument, warn};
+use tracing::{debug, error, info, instrument, trace, warn};
 
 lazy_static! {
     pub static ref SAVE_FOR_LATER_EMOJI: char = '🔖';
@@ -74,8 +74,8 @@ async fn run(config: &Config, discord: &DiscordAPI, category: Category, channel_
         return;
     }
 
-    let events = AgendaCulturalAPI::get_events_by_month(&category, config.debug_config.event_limit)
-        .await;
+    let events =
+        AgendaCulturalAPI::get_events_by_month(&category, config.debug_config.event_limit).await;
 
     if events.is_err() {
         let err = events.unwrap_err();
@@ -112,6 +112,11 @@ async fn handle_reaction_features(
     vote_emojis: &[EmojiConfig; 5],
 ) {
     for thread in threads {
+        if thread.thread_metadata.expect("Should be a thread!").locked {
+            trace!("Ignoring locked thread (probably out-of-date)");
+            continue;
+        }
+
         let messages = discord
             .get_all_messages(thread.id)
             .await
@@ -129,6 +134,11 @@ async fn handle_reaction_features(
                     "Ignoring message from a different user {}",
                     message.author.id
                 );
+                continue;
+            }
+
+            if message.kind != MessageType::Regular {
+                trace!("Ignoring non-regular message (id={})", message.id);
                 continue;
             }
 
