@@ -163,7 +163,7 @@ impl DiscordAPI {
             .await
         {
             Ok(_) => {
-                debug!("Successfully added '{}' reaction", emoji.name);
+                trace!("Successfully added '{}' reaction", emoji.name);
             }
             Err(err) => {
                 error!(

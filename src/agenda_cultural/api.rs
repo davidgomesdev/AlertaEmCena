@@ -9,10 +9,10 @@ use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
 use reqwest_retry::policies::ExponentialBackoff;
 use reqwest_retry::RetryTransientMiddleware;
 use scraper::{Html, Selector};
+use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::ops::Add;
 use std::time::Duration;
-use std::{cmp::Ordering};
 use tracing::{debug, info, instrument, trace, warn};
 use voca_rs::strip::strip_tags;
 
@@ -127,10 +127,7 @@ impl AgendaCulturalAPI {
             while min_date.cmp(&max_date) != Ordering::Greater {
                 events_by_date.insert(min_date, Vec::from([]));
                 trace!("Going for {:?}", min_date);
-                min_date = min_date
-                    .add(TimeDelta::days(31))
-                    .with_day(1)
-                    .unwrap();
+                min_date = min_date.add(TimeDelta::days(31)).with_day(1).unwrap();
             }
         }
     }
@@ -231,8 +228,7 @@ impl AgendaCulturalAPI {
             .map_err(APIError::InvalidResponse)
             .await?;
 
-        serde_json::from_str::<Vec<EventResponse>>(&json_response)
-            .map_err(APIError::ParseError)
+        serde_json::from_str::<Vec<EventResponse>>(&json_response).map_err(APIError::ParseError)
     }
 
     async fn get_full_description(link: &str) -> Option<String> {
