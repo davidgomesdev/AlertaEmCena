@@ -1,5 +1,6 @@
 use crate::config::model::{Config, DebugConfig, EmojiConfig};
 use serenity::all::ChannelId;
+use std::collections::HashMap;
 use std::env;
 
 pub fn load_config() -> Config {
@@ -7,6 +8,8 @@ pub fn load_config() -> Config {
     let artes_channel_id: ChannelId = load_channel_id_config("DISCORD_ARTES_CHANNEL_ID");
     let voting_emojis: [EmojiConfig; 5] = load_voting_emojis_config("VOTING_EMOJIS");
     let gather_new_events: bool = load_bool_config("GATHER_NEW_EVENTS", true);
+    let venue_ticket_shop_url: HashMap<String, String> =
+        load_venue_ticket_shop_config("VENUE_TICKET_SHOP_URLS");
 
     let debug_config = DebugConfig {
         clear_channel: load_bool_config("DEBUG_CLEAR_CHANNEL", false),
@@ -23,6 +26,7 @@ pub fn load_config() -> Config {
         artes_channel_id,
         voting_emojis,
         gather_new_events,
+        venue_ticket_shop_url,
     }
 }
 
@@ -31,6 +35,28 @@ fn load_channel_id_config(name: &str) -> ChannelId {
         .unwrap_or_else(|_| panic!("{} must be set.", name))
         .parse()
         .unwrap_or_else(|_| panic!("{} is not a valid Discord channel ID", name))
+}
+
+pub fn load_venue_ticket_shop_config(name: &str) -> HashMap<String, String> {
+    let config = env::var(name).unwrap_or_else(|_| panic!("{} must be set.", name));
+
+    let venue_ticket_shop: Vec<&str> = config
+        .split(";")
+        .collect();
+
+    venue_ticket_shop
+        .iter()
+        .map(|v| {
+            let venue_to_ticket_shop = v
+                .split_once(":")
+                .expect("Emojis must be comma-separated in the Name:ID format");
+
+            (
+                venue_to_ticket_shop.0.into(),
+                venue_to_ticket_shop.1.into(),
+            )
+        })
+        .collect()
 }
 
 pub fn load_voting_emojis_config(name: &str) -> [EmojiConfig; 5] {
