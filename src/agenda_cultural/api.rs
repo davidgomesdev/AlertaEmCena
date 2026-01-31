@@ -26,7 +26,7 @@ lazy_static! {
         .with(RetryTransientMiddleware::new_with_policy(
             ExponentialBackoff::builder()
                 .retry_bounds(Duration::from_millis(50), Duration::from_millis(500))
-                .build_with_total_retry_duration_and_max_retries(Duration::from_secs(3))
+                .build_with_total_retry_duration_and_max_retries(Duration::from_secs(10))
         ))
         .build();
     static ref EVENT_ID_SELECTOR: Selector = Selector::parse(&format!(
