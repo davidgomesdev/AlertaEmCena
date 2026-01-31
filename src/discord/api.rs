@@ -6,7 +6,11 @@ use itertools::Itertools;
 use lazy_static::lazy_static;
 use regex::Regex;
 use serenity::all::ReactionType::{Custom, Unicode};
-use serenity::all::{AutoArchiveDuration, ChannelType, Colour, CreateEmbedAuthor, CreateThread, CurrentUser, EditThread, Embed, GatewayIntents, GetMessages, GuildChannel, Message, MessageId, MessageReaction, PartialGuild, PrivateChannel, ReactionType, User, UserId};
+use serenity::all::{
+    AutoArchiveDuration, ChannelType, Colour, CreateEmbedAuthor, CreateThread, CurrentUser,
+    EditThread, Embed, GatewayIntents, GetMessages, GuildChannel, Message, MessageId,
+    MessageReaction, PartialGuild, PrivateChannel, ReactionType, User, UserId,
+};
 use serenity::builder::{CreateEmbed, CreateMessage, EditMessage};
 use serenity::cache::Settings;
 use serenity::model::error::Error;
@@ -462,17 +466,13 @@ impl DiscordAPI {
         description: Option<String>,
     ) -> CreateEmbed {
         match &comment {
-            None => CreateEmbed::from(event_embed).description(format!(
-                "{}\n**Voto:** {}",
-                description.unwrap(),
-                vote_emoji
-            )),
-            Some(comment) => CreateEmbed::from(event_embed).description(format!(
-                "{}\n**Voto:** {}\n**Comentários:** {}",
-                description.unwrap(),
-                vote_emoji,
-                comment.content
-            )),
+            None => CreateEmbed::from(event_embed)
+                .description(description.unwrap())
+                .field("Voto", vote_emoji.to_string(), true),
+            Some(comment) => CreateEmbed::from(event_embed)
+                .description(description.unwrap())
+                .field("Voto", vote_emoji.to_string(), true)
+                .field("Comentários", &comment.content, true),
         }
     }
 
