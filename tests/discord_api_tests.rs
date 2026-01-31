@@ -12,6 +12,11 @@ mod discord {
         static ref token: String = env::var("DISCORD_TOKEN").expect("DISCORD_TOKEN not set");
         static ref tester_token: String =
             env::var("DISCORD_TESTER_TOKEN").expect("DISCORD_TESTER_TOKEN not set");
+        // Real user ID to test reactions and private messages
+        static ref user_id: u64 = env::var("DISCORD_USER_ID")
+            .expect("DISCORD_USER_ID not set")
+            .parse()
+            .expect("DISCORD_USER_ID is in a wrong format");
         static ref channel_id: ChannelId = env::var("DISCORD_CHANNEL_ID")
             .expect("DISCORD_CHANNEL_ID not set")
             .parse()
@@ -267,6 +272,30 @@ mod discord {
 
         assert_eq!(threads.len(), 1);
         assert_eq!(threads.pop().unwrap().name, thread_name);
+    }
+
+    mod backup {
+        use super::{build_api, user_id};
+        use alertaemcena::discord::backup::backup_user_votes;
+        use serenity::all::UserId;
+
+        #[test_log::test(tokio::test)]
+        async fn should_backup_user_votes_from_dm() {
+            let api = build_api().await;
+            let discord_user_id = UserId::from(*user_id);
+            let backup = backup_user_votes(&api, discord_user_id).await;
+
+            assert!(backup.is_some());
+
+            let votes = backup.unwrap();
+
+            assert!(
+                votes
+                    .iter()
+                    .any(|vote_record| vote_record.title == "O Auto da Barca do Inferno"),
+                "Didn't find the sent message in the backup!"
+            );
+        }
     }
 
     mod end_to_end {
