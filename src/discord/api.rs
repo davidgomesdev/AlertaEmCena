@@ -6,11 +6,7 @@ use itertools::Itertools;
 use lazy_static::lazy_static;
 use regex::Regex;
 use serenity::all::ReactionType::{Custom, Unicode};
-use serenity::all::{
-    AutoArchiveDuration, ChannelType, Colour, CreateEmbedAuthor, CreateThread, CurrentUser,
-    EditThread, Embed, GatewayIntents, GetMessages, GuildChannel, Message, MessageId,
-    MessageReaction, PartialGuild, PrivateChannel, ReactionType, User,
-};
+use serenity::all::{AutoArchiveDuration, ChannelType, Colour, CreateEmbedAuthor, CreateThread, CurrentUser, EditThread, Embed, GatewayIntents, GetMessages, GuildChannel, Message, MessageId, MessageReaction, PartialGuild, PrivateChannel, ReactionType, User, UserId};
 use serenity::builder::{CreateEmbed, CreateMessage, EditMessage};
 use serenity::cache::Settings;
 use serenity::model::error::Error;
@@ -181,7 +177,10 @@ impl DiscordAPI {
             .await
     }
 
-    #[instrument(skip(self, message), fields(event = %message.embeds.first().map(|embed| embed.url.clone().unwrap()).unwrap_or_default()
+    #[instrument(
+        skip(self, message),
+        fields(event = %message.embeds.first()
+            .map(|embed| embed.url.clone().unwrap()).unwrap_or_default()
     ))]
     pub async fn add_reaction_to_message(&self, message: &Message, emoji_char: char) {
         let react_result = message
@@ -197,7 +196,10 @@ impl DiscordAPI {
         }
     }
 
-    #[instrument(skip(self, message), fields(event = %message.embeds.first().map(|embed| embed.url.clone().unwrap()).unwrap_or_default()
+    #[instrument(
+        skip(self, message),
+        fields(event = %message.embeds.first()
+            .map(|embed| embed.url.clone().unwrap()).unwrap_or_default()
     ))]
     pub async fn tag_save_for_later_reactions(&self, message: &mut Message, emoji_char: char) {
         let save_for_later_reaction = ReactionType::from(emoji_char);
@@ -269,26 +271,29 @@ impl DiscordAPI {
             .expect("Failed to edit message!");
     }
 
-    #[instrument(skip(self, event_message, vote_emojis), fields(event = %event_message.embeds.first().map(|embed| embed.url.clone().unwrap()).unwrap_or_default()
+    #[instrument(skip_all,
+        fields(event = %event_message.embeds.first()
+            .map(|embed| embed.url.clone().unwrap()).unwrap_or_default()
     ))]
     pub async fn send_privately_users_review(
         &self,
         event_message: &Message,
         vote_emojis: &[EmojiConfig; 5],
-    ) {
+    ) -> Vec<UserId> {
+        let mut users_with_reviews = Vec::new();
         let mut event_embed = event_message.embeds.first().cloned().unwrap();
         let event_url = event_embed.url.clone();
 
         if event_url.is_none() {
             warn!("Event has no URL!");
-            return;
+            return users_with_reviews;
         }
 
         let users_votes = self.get_user_votes(event_message, vote_emojis).await;
 
         if users_votes.is_empty() {
             trace!("No user has voted on this message");
-            return;
+            return users_with_reviews;
         }
 
         let event_url = event_url.unwrap();
@@ -297,10 +302,15 @@ impl DiscordAPI {
 
         for (vote, users) in users_votes.iter().enumerate() {
             for user in users.iter().filter(|user| !user.bot) {
+                if !users_with_reviews.contains(&user.id) {
+                    users_with_reviews.push(user.id);
+                }
                 self.send_user_review(user, &event_url, event_embed.clone(), vote_emojis, vote)
                     .await;
             }
         }
+
+        users_with_reviews
     }
 
     async fn send_user_review(
