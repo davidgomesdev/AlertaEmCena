@@ -7,10 +7,10 @@ use tracing::{error, info, instrument};
 pub async fn backup_user_votes(discord: &DiscordAPI, user_id: UserId) -> Option<Vec<VoteRecord>> {
     let dm_channel = user_id.create_dm_channel(&discord.client.http).await;
 
-    if dm_channel.is_err() {
+    if let Err(err) = dm_channel {
         error!(
             "Failed to create DM channel! Error: {}",
-            dm_channel.unwrap_err()
+            err
         );
         return None;
     }
@@ -20,10 +20,10 @@ pub async fn backup_user_votes(discord: &DiscordAPI, user_id: UserId) -> Option<
         .messages(&discord.client.http, GetMessages::new())
         .await;
 
-    if messages.is_err() {
+    if let Err(err) = messages {
         error!(
             "Failed to get messages from DM channel! Error: {}",
-            messages.unwrap_err()
+            err
         );
         return None;
     }

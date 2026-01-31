@@ -22,3 +22,5 @@ docker/.data
 
 test-locally.sh
 run-locally.sh
+.idea
+vote_backups
