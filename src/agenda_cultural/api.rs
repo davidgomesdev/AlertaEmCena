@@ -7,6 +7,7 @@ use lazy_static::lazy_static;
 use reqwest::{Client, Response};
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
 use reqwest_retry::policies::ExponentialBackoff;
+use reqwest_retry::Jitter::Bounded;
 use reqwest_retry::RetryTransientMiddleware;
 use scraper::{Html, Selector};
 use std::cmp::Ordering;
@@ -25,7 +26,8 @@ lazy_static! {
     static ref REST_CLIENT: ClientWithMiddleware = ClientBuilder::new(Client::new())
         .with(RetryTransientMiddleware::new_with_policy(
             ExponentialBackoff::builder()
-                .retry_bounds(Duration::from_millis(50), Duration::from_millis(500))
+                .jitter(Bounded)
+                .retry_bounds(Duration::from_millis(50), Duration::from_millis(1000))
                 .build_with_total_retry_duration_and_max_retries(Duration::from_secs(10))
         ))
         .build();
