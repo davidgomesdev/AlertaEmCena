@@ -4,18 +4,17 @@ use alertaemcena::api::*;
 use alertaemcena::config::env_loader::load_config;
 use alertaemcena::config::model::{Config, DebugConfig, EmojiConfig};
 use alertaemcena::discord::api::{DiscordAPI, EventsThread};
+use alertaemcena::discord::backup::{backup_user_votes, VoteRecord};
 use alertaemcena::tracing::setup_loki;
-use chrono::{DateTime, NaiveDateTime, Utc};
+use chrono::Utc;
 use futures::{future, TryFutureExt};
 use itertools::Itertools;
 use lazy_static::lazy_static;
-use serde::Serialize;
 use serenity::all::{
-    ChannelId, GetMessages, GuildChannel, Member, MessageType, PrivateChannel, UserId,
+    ChannelId, GuildChannel, MessageType, UserId,
 };
 use std::collections::BTreeMap;
 use std::process::exit;
-use serenity::all::Route::User;
 use tokio::fs;
 use tokio::fs::File;
 use tokio::io::AsyncWriteExt;
@@ -107,9 +106,7 @@ async fn run(
     let events =
         AgendaCulturalAPI::get_events_by_month(&category, config.debug_config.event_limit).await;
 
-    if events.is_err() {
-        let err = events.unwrap_err();
-
+    if let Err(err) = events {
         error!("Failed getting events. Reason: {:?}", err);
 
         return users_with_reactions;
@@ -140,7 +137,7 @@ async fn run(
 }
 
 #[instrument(skip(discord))]
-async fn backup_votes(discord: &DiscordAPI, vec: Vec<UserId>) {
+pub async fn backup_votes(discord: &DiscordAPI, vec: Vec<UserId>) {
     let vote_backups_folder = "vote_backups/";
     let vote_backup_file_path = format!(
         "{}{}.json",
@@ -185,11 +182,11 @@ async fn backup_votes(discord: &DiscordAPI, vec: Vec<UserId>) {
 
     let backup_votes_file = File::create(&vote_backup_file_path).await;
 
-    if backup_votes_file.is_err() {
+    if let Err(err) = backup_votes_file {
         error!(
             "Failed to create vote backup file at {}! Error: {}",
             vote_backup_file_path,
-            backup_votes_file.unwrap_err()
+            err
         );
         return;
     }
@@ -204,115 +201,6 @@ async fn backup_votes(discord: &DiscordAPI, vec: Vec<UserId>) {
     }
 
     info!("Vote backup file written to {}", vote_backup_file_path);
-}
-
-#[instrument(skip(discord))]
-async fn backup_user_votes(discord: &DiscordAPI, user_id: UserId) -> Option<Vec<VoteRecord>> {
-    let dm_channel = user_id.create_dm_channel(&discord.client.http).await;
-
-    if dm_channel.is_err() {
-        error!(
-            "Failed to create DM channel! Error: {}",
-            dm_channel.unwrap_err()
-        );
-        return None;
-    }
-
-    let messages = dm_channel
-        .unwrap()
-        .messages(&discord.client.http, GetMessages::new())
-        .await;
-
-    if messages.is_err() {
-        error!(
-            "Failed to get messages from DM channel! Error: {}",
-            messages.unwrap_err()
-        );
-        return None;
-    }
-
-    messages
-        .unwrap()
-        .iter()
-        .map(|message| {
-            if message.author.id != discord.own_user.id
-                || message.kind != MessageType::Regular
-                || message.embeds.is_empty()
-            {
-                return None;
-            }
-
-            let embed = &message.embeds[0];
-            let description = embed
-                .description
-                .clone();
-
-            if description.is_none() {
-                error!("No description on event!");
-                return None;
-            }
-
-            let description = description.unwrap();
-            let embed_fields = &embed.fields;
-            let user_vote = if let Some(vote) = embed_fields
-                .iter()
-                .find(|field| field.name == "Voto")
-                .cloned() {
-                let comments = embed_fields.iter().find(|field| field.name == "Comentários").map(|comment_field| comment_field.value.clone());
-
-                UserVote {
-                    vote: vote.value,
-                    comments,
-                }
-            } else {
-                // Fallback for embed-less reviews (backwards compatibility)
-                let vote = description
-                    .lines()
-                    .find(|line| line.starts_with("Voto:"))
-                    .map(|line| line.replace("Voto:", "").trim().to_string());
-                let comments = description
-                    .lines()
-                    .find(|line| line.starts_with("Comentários:"))
-                    .map(|line| line.replace("Comentários:", "").trim().to_string());
-
-                if vote.is_none() {
-                    error!("No vote found in description on an embed-less review!");
-                    return None;
-                }
-
-                UserVote {
-                    vote: vote.unwrap(),
-                    comments,
-                }
-            };
-
-            Some(VoteRecord {
-                user_id,
-                title: embed
-                    .title
-                    .clone()
-                    .unwrap_or_else(|| { error!("No title on event"); "No Title".to_string() }),
-                url: embed.url.clone().unwrap_or_else(|| { error!("No URL on event"); "No URL".to_string() }),
-                description,
-                user_vote
-            })
-        })
-        .collect()
-}
-
-#[derive(Serialize)]
-struct VoteRecord {
-    user_id: UserId,
-    title: String,
-    url: String,
-    description: String,
-    user_vote: UserVote
-}
-
-#[derive(Serialize)]
-struct UserVote {
-    vote: String,
-    comments: Option<String>,
 }
 
 /// Returns users who have used reaction features in the given threads
