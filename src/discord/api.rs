@@ -22,8 +22,6 @@ use std::fmt::Debug;
 use tracing::field::debug;
 use tracing::{debug, error, info, instrument, trace, warn};
 
-const AUTHOR_NAME: &str = "AlertaEmCena";
-
 const PORTUGUESE_MONTHS: [&str; 12] = [
     "Janeiro",
     "Fevereiro",
@@ -93,7 +91,7 @@ impl DiscordAPI {
 
     #[instrument(skip(self, channel_id), fields(channel_id = %channel_id.to_string(), event = %event.title.to_string()
     ))]
-    pub async fn send_event(&self, channel_id: ChannelId, event: Event) -> Message {
+    pub async fn send_event(&self, channel_id: ChannelId, event: Event, ticket_shop_url: Option<String>) -> Message {
         info!("Sending event");
 
         let mut description = event.details.description;
@@ -102,14 +100,19 @@ impl DiscordAPI {
             description = format!("{}\n\n{}", description.clone(), CHILDREN_LABEL);
         }
 
+        let mut author = CreateEmbedAuthor::new(&event.venue);
+        
+        if let Some(ticket_shop_url) = ticket_shop_url {
+            author = author.url(ticket_shop_url);
+        }
+        
         let embed = CreateEmbed::new()
             .title(event.title)
             .url(event.link)
             .description(description.clone())
-            .author(CreateEmbedAuthor::new(AUTHOR_NAME))
+            .author(author)
             .color(Colour::new(0x005eeb))
             .field("Datas", event.occurring_at.dates, true)
-            .field("Onde", event.venue, true)
             .image(event.details.image_url);
 
         let message_builder = CreateMessage::new().add_embed(embed.clone());
@@ -396,7 +399,7 @@ impl DiscordAPI {
         });
 
         if let Some(reaction) = reaction {
-            Self::has_no_user_reactions(reaction)
+            Self::has_someone_reacted(reaction)
         } else {
             warn!(
                 "Message does not have reaction emoji '{}'!",
@@ -416,14 +419,14 @@ impl DiscordAPI {
         });
 
         if let Some(reaction) = reaction {
-            Self::has_no_user_reactions(reaction)
+            Self::has_someone_reacted(reaction)
         } else {
             warn!("Message does not have saved for later emoji!");
             false
         }
     }
 
-    fn has_no_user_reactions(reaction: &MessageReaction) -> bool {
+    fn has_someone_reacted(reaction: &MessageReaction) -> bool {
         if reaction.count == 1 {
             // No one has voted
             if reaction.me {
@@ -716,7 +719,7 @@ mod tests {
         "#,
         )
         .unwrap();
-        let has_no_user_reactions = DiscordAPI::has_no_user_reactions(&reaction);
+        let has_no_user_reactions = DiscordAPI::has_someone_reacted(&reaction);
 
         assert!(has_no_user_reactions);
     }
@@ -739,7 +742,7 @@ mod tests {
         "#,
         )
         .unwrap();
-        let has_no_user_reactions = DiscordAPI::has_no_user_reactions(&reaction);
+        let has_no_user_reactions = DiscordAPI::has_someone_reacted(&reaction);
 
         assert!(!has_no_user_reactions);
     }
@@ -762,7 +765,7 @@ mod tests {
         "#,
         )
         .unwrap();
-        let has_no_user_reactions = DiscordAPI::has_no_user_reactions(&reaction);
+        let has_no_user_reactions = DiscordAPI::has_someone_reacted(&reaction);
 
         assert!(!has_no_user_reactions);
     }

@@ -1,4 +1,5 @@
 use serenity::all::ChannelId;
+use std::collections::HashMap;
 use std::fmt::Display;
 
 #[derive(Debug)]
@@ -7,6 +8,7 @@ pub struct Config {
     pub teatro_channel_id: ChannelId,
     pub artes_channel_id: ChannelId,
     pub voting_emojis: [EmojiConfig; 5],
+    pub venue_ticket_shop_url: HashMap<String, String>,
     pub gather_new_events: bool,
 }
 

@@ -403,7 +403,7 @@ mod discord {
             let thread = api
                 .get_date_thread(&active_threads, *channel_id, date)
                 .await;
-            let message = api.send_event(thread.thread_id, event).await;
+            let message = api.send_event(thread.thread_id, event, None).await;
             (thread, message)
         }
 

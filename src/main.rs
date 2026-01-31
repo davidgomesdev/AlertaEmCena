@@ -2,7 +2,7 @@ use alertaemcena::agenda_cultural::api::AgendaCulturalAPI;
 use alertaemcena::agenda_cultural::model::{Category, Event};
 use alertaemcena::api::*;
 use alertaemcena::config::env_loader::load_config;
-use alertaemcena::config::model::{Config, DebugConfig, EmojiConfig};
+use alertaemcena::config::model::{Config, EmojiConfig};
 use alertaemcena::discord::api::{DiscordAPI, EventsThread};
 use alertaemcena::discord::backup::{backup_user_votes, VoteRecord};
 use alertaemcena::tracing::setup_loki;
@@ -126,8 +126,7 @@ async fn run(
     send_new_events(
         discord,
         new_events,
-        &config.debug_config,
-        &config.voting_emojis,
+        config,
     )
     .await;
 
@@ -270,20 +269,19 @@ async fn handle_reaction_features(
     users_with_reactions
 }
 
-#[instrument(skip(discord, new_events, emojis, debug_config), fields(new_events_count = %new_events.len()
+#[instrument(skip_all, fields(new_events_count = %new_events.len()
 ))]
 async fn send_new_events(
     discord: &DiscordAPI,
     new_events: BTreeMap<EventsThread, Vec<Event>>,
-    debug_config: &DebugConfig,
-    emojis: &[EmojiConfig; 5],
+    config: &Config
 ) {
     if new_events.is_empty() {
         info!("No new events to send");
         return;
     }
 
-    if debug_config.skip_sending {
+    if config.debug_config.skip_sending {
         info!("Skipping sending events");
         return;
     }
@@ -300,14 +298,18 @@ async fn send_new_events(
         );
 
         for event in events {
-            let message = discord.send_event(thread.thread_id, event).await;
+            let ticket_url = config
+                .venue_ticket_shop_url
+                .get(&event.venue)
+                .cloned();
+            let message = discord.send_event(thread.thread_id, event, ticket_url).await;
 
-            if debug_config.skip_feature_reactions {
+            if config.debug_config.skip_feature_reactions {
                 info!("Skipping feature reactions");
                 continue;
             }
 
-            add_feature_reactions(discord, &message, emojis, *SAVE_FOR_LATER_EMOJI).await;
+            add_feature_reactions(discord, &message, &config.voting_emojis, *SAVE_FOR_LATER_EMOJI).await;
         }
     }
 }

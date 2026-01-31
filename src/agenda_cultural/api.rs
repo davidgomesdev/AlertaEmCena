@@ -28,7 +28,7 @@ lazy_static! {
             ExponentialBackoff::builder()
                 .jitter(Bounded)
                 .retry_bounds(Duration::from_millis(50), Duration::from_millis(1000))
-                .build_with_total_retry_duration_and_max_retries(Duration::from_secs(10))
+                .build_with_total_retry_duration_and_max_retries(Duration::from_secs(30))
         ))
         .build();
     static ref EVENT_ID_SELECTOR: Selector = Selector::parse(&format!(
