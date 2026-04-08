@@ -222,7 +222,7 @@ async fn handle_reaction_features(
             .await
             .expect("Failed to get messages");
 
-        info!(
+        debug!(
             "Tagging save for later and sending votes in DM (on thread '{}' with {} messages)",
             thread.name,
             messages.len()

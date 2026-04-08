@@ -47,6 +47,7 @@ lazy_static! {
 pub struct DiscordAPI {
     pub client: Client,
     pub own_user: CurrentUser,
+    pub ticket_shop_icon_url: String,
 }
 
 impl DiscordAPI {
@@ -77,8 +78,14 @@ impl DiscordAPI {
             .expect("Error getting user");
 
         debug!("Own user id is {}", own_user.id);
+        let ticket_shop_icon_url =
+            env::var("TICKET_SHOP_ICON_URL").expect("TICKET_SHOP_ICON_URL not set");
 
-        Self { client, own_user }
+        Self {
+            client,
+            own_user,
+            ticket_shop_icon_url,
+        }
     }
 
     pub async fn get_messages(&self, channel_id: ChannelId) -> Vec<Message> {
@@ -91,7 +98,12 @@ impl DiscordAPI {
 
     #[instrument(skip(self, channel_id), fields(channel_id = %channel_id.to_string(), event = %event.title.to_string()
     ))]
-    pub async fn send_event(&self, channel_id: ChannelId, event: Event, ticket_shop_url: Option<String>) -> Message {
+    pub async fn send_event(
+        &self,
+        channel_id: ChannelId,
+        event: Event,
+        ticket_shop_url: Option<String>,
+    ) -> Message {
         info!("Sending event");
 
         let mut description = event.details.description;
@@ -101,11 +113,13 @@ impl DiscordAPI {
         }
 
         let mut author = CreateEmbedAuthor::new(&event.venue);
-        
+
         if let Some(ticket_shop_url) = ticket_shop_url {
-            author = author.url(ticket_shop_url);
+            author = author
+                .url(ticket_shop_url)
+                .icon_url(&self.ticket_shop_icon_url);
         }
-        
+
         let embed = CreateEmbed::new()
             .title(event.title)
             .url(event.link)
