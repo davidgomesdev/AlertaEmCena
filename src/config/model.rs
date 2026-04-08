@@ -9,6 +9,7 @@ pub struct Config {
     pub artes_channel_id: ChannelId,
     pub voting_emojis: [EmojiConfig; 5],
     pub venue_ticket_shop_url: HashMap<String, String>,
+    pub ticket_shop_icon_url: String,
     pub gather_new_events: bool,
 }
 

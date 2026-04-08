@@ -10,9 +10,7 @@ use chrono::Utc;
 use futures::{future, TryFutureExt};
 use itertools::Itertools;
 use lazy_static::lazy_static;
-use serenity::all::{
-    ChannelId, GuildChannel, MessageType, UserId,
-};
+use serenity::all::{ChannelId, GuildChannel, MessageType, UserId};
 use std::collections::BTreeMap;
 use std::process::exit;
 use tokio::fs;
@@ -123,12 +121,7 @@ async fn run(
 
     info!("Filtered new events");
 
-    send_new_events(
-        discord,
-        new_events,
-        config,
-    )
-    .await;
+    send_new_events(discord, new_events, config).await;
 
     info!("Finished sending new events for {}", category);
 
@@ -184,13 +177,13 @@ pub async fn backup_votes(discord: &DiscordAPI, vec: Vec<UserId>) {
     if let Err(err) = backup_votes_file {
         error!(
             "Failed to create vote backup file at {}! Error: {}",
-            vote_backup_file_path,
-            err
+            vote_backup_file_path, err
         );
         return;
     }
 
-    let write_return = backup_votes_file.unwrap()
+    let write_return = backup_votes_file
+        .unwrap()
         .write_all(&serde_json::to_vec_pretty(&user_votes).expect("Failed to serialize user votes"))
         .await;
 
@@ -274,7 +267,7 @@ async fn handle_reaction_features(
 async fn send_new_events(
     discord: &DiscordAPI,
     new_events: BTreeMap<EventsThread, Vec<Event>>,
-    config: &Config
+    config: &Config,
 ) {
     if new_events.is_empty() {
         info!("No new events to send");
@@ -298,18 +291,28 @@ async fn send_new_events(
         );
 
         for event in events {
-            let ticket_url = config
-                .venue_ticket_shop_url
-                .get(&event.venue)
-                .cloned();
-            let message = discord.send_event(thread.thread_id, event, ticket_url).await;
+            let ticket_url = config.venue_ticket_shop_url.get(&event.venue).cloned();
+            let message = discord
+                .send_event(
+                    thread.thread_id,
+                    event,
+                    ticket_url,
+                    &config.ticket_shop_icon_url,
+                )
+                .await;
 
             if config.debug_config.skip_feature_reactions {
                 info!("Skipping feature reactions");
                 continue;
             }
 
-            add_feature_reactions(discord, &message, &config.voting_emojis, *SAVE_FOR_LATER_EMOJI).await;
+            add_feature_reactions(
+                discord,
+                &message,
+                &config.voting_emojis,
+                *SAVE_FOR_LATER_EMOJI,
+            )
+            .await;
         }
     }
 }
