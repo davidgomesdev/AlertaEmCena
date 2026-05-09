@@ -1,48 +1,11 @@
 ---
+name: alertaemcena
 networks:
   loki:
+  tracing:
+  prometheus:
 
 services:
-  read:
-    image: grafana/loki:latest
-    command: "-config.file=/etc/loki/config.yaml -target=read"
-    ports:
-      - 3101:3100
-      - 7946
-      - 9095
-    volumes:
-      - ./loki-config.yaml:/etc/loki/config.yaml
-    depends_on:
-      - minio
-    healthcheck:
-      test: [ "CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3100/ready || exit 1" ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks: &loki-dns
-      loki:
-        aliases:
-          - loki
-
-  write:
-    image: grafana/loki:latest
-    command: "-config.file=/etc/loki/config.yaml -target=write"
-    ports:
-      - 3102:3100
-      - 7946
-      - 9095
-    volumes:
-      - ./loki-config.yaml:/etc/loki/config.yaml
-    healthcheck:
-      test: [ "CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3100/ready || exit 1" ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    depends_on:
-      - minio
-    networks:
-      <<: *loki-dns
-
   minio:
     image: minio/minio
     entrypoint:
@@ -77,6 +40,8 @@ services:
       - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
     depends_on:
       - gateway
+      - tempo
+      - prometheus
     entrypoint:
       - sh
       - -euc
@@ -89,6 +54,14 @@ services:
             type: loki
             access: proxy
             url: http://gateway:3100
+          - name: Tempo
+            type: tempo
+            access: proxy
+            url: http://tempo:3200
+          - name: Prometheus
+            type: prometheus
+            access: proxy
+            url: http://prometheus:9090
         EOF
         /run.sh
     ports:
@@ -100,6 +73,8 @@ services:
       retries: 5
     networks:
       - loki
+      - tracing
+      - prometheus
 
   backend:
     image: grafana/loki:latest
@@ -116,9 +91,6 @@ services:
 
   gateway:
     image: nginx:latest
-    depends_on:
-      - read
-      - write
     entrypoint:
       - sh
       - -euc
@@ -189,3 +161,30 @@ services:
     command: -f json -d 200ms -l
     networks:
       - loki
+
+  prometheus:
+    image: prom/prometheus:latest
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --web.enable-remote-write-receiver
+      - --enable-feature=exemplar-storage
+    volumes:
+      - ./prometheus-config.yaml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+    networks:
+      - tracing
+      - prometheus
+
+  tempo:
+    image: grafana/tempo:latest
+    command: ["-config.file=/etc/tempo.yaml"]
+    volumes:
+      - ./tempo-config.yaml:/etc/tempo.yaml
+    ports:
+      - "3200:3200"
+      - "4317:4317"
+    depends_on:
+      - prometheus
+    networks:
+      - tracing
