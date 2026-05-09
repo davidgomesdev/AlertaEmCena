@@ -37,6 +37,7 @@ pub async fn filter_new_events_by_thread(
         .collect()
 }
 
+#[instrument(skip_all, fields(thread_count = %threads.len()))]
 async fn get_sent_events(discord: &DiscordAPI, threads: &[GuildChannel]) -> Vec<String> {
     let mut sent_events = Vec::new();
 
@@ -54,6 +55,7 @@ async fn get_sent_events(discord: &DiscordAPI, threads: &[GuildChannel]) -> Vec<
     sent_events
 }
 
+#[instrument(skip_all, fields(month_count = %events.len()))]
 async fn get_threads_by_month(
     discord: &DiscordAPI,
     channel_id: ChannelId,
