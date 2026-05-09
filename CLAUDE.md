@@ -54,7 +54,7 @@ Each channel (Teatro / Artes) has public threads named `"<Month PT> <Year>"` (e.
 | `VENUE_TICKET_SHOP_URLS` | `venue:url;venue:url;...` | Semicolon-separated |
 | `TICKET_SHOP_ICON_URL` | URL | Icon shown on ticket link |
 | `LOKI_URL` | `https://user:token@host` | Optional; skipped if missing or unreachable |
-| `OTLP_ENDPOINT` | `http://host:4317` | Optional; gRPC OTLP endpoint (Grafana Alloy) |
+| `OTLP_ENDPOINT` | `http://host:4317` | Optional; gRPC OTLP endpoint (Tempo) |
 | `GATHER_NEW_EVENTS` | bool | Default `true`; set `false` to only process reactions |
 
 ### Debug variables (all optional)
