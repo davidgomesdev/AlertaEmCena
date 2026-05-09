@@ -5,7 +5,7 @@ use alertaemcena::config::env_loader::load_config;
 use alertaemcena::config::model::{Config, EmojiConfig};
 use alertaemcena::discord::api::{DiscordAPI, EventsThread};
 use alertaemcena::discord::backup::{backup_user_votes, VoteRecord};
-use alertaemcena::tracing::setup_loki;
+use alertaemcena::tracing::setup_tracing;
 use chrono::Utc;
 use futures::{future, TryFutureExt};
 use itertools::Itertools;
@@ -16,7 +16,7 @@ use std::process::exit;
 use tokio::fs;
 use tokio::fs::File;
 use tokio::io::AsyncWriteExt;
-use tracing::{debug, error, info, instrument, trace, warn};
+use tracing::{debug, error, info, info_span, instrument, trace, warn, Instrument};
 
 lazy_static! {
     pub static ref SAVE_FOR_LATER_EMOJI: char = '🔖';
@@ -24,7 +24,7 @@ lazy_static! {
 
 #[tokio::main]
 async fn main() {
-    let loki_controller = setup_loki().await;
+    let tracing_handles = setup_tracing().await;
 
     {
         let _shutdown_hook = ShutdownHook;
@@ -48,6 +48,7 @@ async fn main() {
 
         if !config.debug_config.skip_artes {
             run(&config, &discord, Category::Artes, config.artes_channel_id)
+                .instrument(info_span!("pipeline", category = "Artes"))
                 .await
                 .iter()
                 .for_each(|u| {
@@ -61,6 +62,7 @@ async fn main() {
             Category::Teatro,
             config.teatro_channel_id,
         )
+        .instrument(info_span!("pipeline", category = "Teatro"))
         .await
         .iter()
         .for_each(|u| {
@@ -72,10 +74,7 @@ async fn main() {
         backup_votes(&discord, users_to_backup).await;
     }
 
-    if let Some((controller, join_handle)) = loki_controller {
-        controller.shutdown().await;
-        join_handle.await.expect("Failed joining Loki task");
-    }
+    tracing_handles.shutdown().await;
 }
 
 #[instrument(skip(config, discord, channel_id))]
@@ -205,58 +204,65 @@ async fn handle_reaction_features(
     let mut users_with_reactions = Vec::new();
 
     for thread in threads {
-        if thread.thread_metadata.expect("Should be a thread!").locked {
-            trace!("Ignoring locked thread (probably out-of-date)");
-            continue;
+        let thread_span = info_span!("process_thread", thread = %thread.name);
+
+        async {
+            let Some(meta) = thread.thread_metadata else {
+                warn!("Thread '{}' has no metadata, skipping", thread.name);
+                return;
+            };
+            if meta.locked {
+                trace!("Ignoring locked thread (probably out-of-date)");
+                return;
+            }
+
+            let messages = discord.get_all_messages(thread.id).await;
+
+            debug!(
+                "Tagging save for later and sending votes in DM (on thread '{}' with {} messages)",
+                thread.name,
+                messages.len()
+            );
+
+            for mut message in messages {
+                if message.author != *discord.own_user {
+                    debug!(
+                        "Ignoring message from a different user {}",
+                        message.author.id
+                    );
+                    continue;
+                }
+
+                if message.kind != MessageType::Regular {
+                    trace!("Ignoring non-regular message (id={})", message.id);
+                    continue;
+                }
+
+                if message.embeds.is_empty() {
+                    warn!(
+                        "Found message without embed (id={}; content={})",
+                        message.id, message.content
+                    );
+                    continue;
+                }
+
+                discord
+                    .tag_save_for_later_reactions(&mut message, *SAVE_FOR_LATER_EMOJI)
+                    .await;
+
+                discord
+                    .send_privately_users_review(&message, vote_emojis)
+                    .await
+                    .iter()
+                    .for_each(|u| {
+                        if !users_with_reactions.contains(u) {
+                            users_with_reactions.push(*u);
+                        }
+                    });
+            }
         }
-
-        let messages = discord
-            .get_all_messages(thread.id)
-            .await
-            .expect("Failed to get messages");
-
-        debug!(
-            "Tagging save for later and sending votes in DM (on thread '{}' with {} messages)",
-            thread.name,
-            messages.len()
-        );
-
-        for mut message in messages {
-            if message.author != *discord.own_user {
-                debug!(
-                    "Ignoring message from a different user {}",
-                    message.author.id
-                );
-                continue;
-            }
-
-            if message.kind != MessageType::Regular {
-                trace!("Ignoring non-regular message (id={})", message.id);
-                continue;
-            }
-
-            if message.embeds.is_empty() {
-                warn!(
-                    "Found message without embed (id={}; content={})",
-                    message.id, message.content
-                );
-                continue;
-            }
-
-            discord
-                .tag_save_for_later_reactions(&mut message, *SAVE_FOR_LATER_EMOJI)
-                .await;
-
-            discord
-                .send_privately_users_review(&message, vote_emojis)
-                .await
-                .iter()
-                .for_each(|u| {
-                    if !users_with_reactions.contains(u) {
-                        users_with_reactions.push(*u);
-                    }
-                });
-        }
+        .instrument(thread_span)
+        .await;
     }
 
     users_with_reactions
@@ -291,27 +297,40 @@ async fn send_new_events(
         );
 
         for event in events {
-            let ticket_url = config.venue_ticket_shop_url.get(&event.venue).cloned();
-            let message = discord
-                .send_event(
-                    thread.thread_id,
-                    event,
-                    ticket_url,
-                    &config.ticket_shop_icon_url,
+            let event_span = info_span!(
+                "send_event",
+                title = %event.title,
+                venue = %event.venue,
+                link = %event.link,
+                dates = %event.occurring_at.dates,
+                is_for_children = %event.is_for_children,
+            );
+
+            async {
+                let ticket_url = config.venue_ticket_shop_url.get(&event.venue).cloned();
+                let message = discord
+                    .send_event(
+                        thread.thread_id,
+                        event,
+                        ticket_url,
+                        &config.ticket_shop_icon_url,
+                    )
+                    .await;
+
+                if config.debug_config.skip_feature_reactions {
+                    info!("Skipping feature reactions");
+                    return;
+                }
+
+                add_feature_reactions(
+                    discord,
+                    &message,
+                    &config.voting_emojis,
+                    *SAVE_FOR_LATER_EMOJI,
                 )
                 .await;
-
-            if config.debug_config.skip_feature_reactions {
-                info!("Skipping feature reactions");
-                continue;
             }
-
-            add_feature_reactions(
-                discord,
-                &message,
-                &config.voting_emojis,
-                *SAVE_FOR_LATER_EMOJI,
-            )
+            .instrument(event_span)
             .await;
         }
     }

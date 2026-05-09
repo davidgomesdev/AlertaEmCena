@@ -188,10 +188,15 @@ impl DiscordAPI {
         }
     }
 
-    pub async fn get_all_messages(&self, channel_id: ChannelId) -> serenity::Result<Vec<Message>> {
+    pub async fn get_all_messages(&self, channel_id: ChannelId) -> Vec<Message> {
         channel_id
             .messages_iter(&self.client.http)
-            .try_collect()
+            .filter_map(|result| async {
+                result
+                    .inspect_err(|e| error!("Failed to fetch messages: {}", e))
+                    .ok()
+            })
+            .collect()
             .await
     }
 
@@ -232,17 +237,20 @@ impl DiscordAPI {
             return;
         }
 
-        let saved_for_later_user_ids: Vec<String> = message
+        let saved_for_later_user_ids: Vec<String> = match message
             .reaction_users(&self.client.http, save_for_later_reaction, None, None)
             .await
-            .map(|users| {
-                users
-                    .into_iter()
-                    .map(|user| user.id.to_string())
-                    .filter(|user_id| *user_id != self.own_user.id.to_string())
-                    .collect()
-            })
-            .expect("Couldn't get users that reacted!");
+        {
+            Ok(users) => users
+                .into_iter()
+                .map(|user| user.id.to_string())
+                .filter(|user_id| *user_id != self.own_user.id.to_string())
+                .collect(),
+            Err(e) => {
+                error!("Failed to get save-for-later reaction users: {}", e);
+                return;
+            }
+        };
 
         if saved_for_later_user_ids.is_empty() && message.content.is_empty() {
             trace!("No users saved for later");
@@ -257,17 +265,15 @@ impl DiscordAPI {
         let message_content = format!("Interessados: {}", mentions);
 
         if saved_for_later_user_ids.is_empty() && message.pinned {
-            message
-                .unpin(&self.client.http)
-                .await
-                .expect("Failed to unpin no longer saved for later message!");
+            if let Err(e) = message.unpin(&self.client.http).await {
+                error!("Failed to unpin message {}: {}", message.id, e);
+            }
         }
 
         if !saved_for_later_user_ids.is_empty() && !message.pinned {
-            message
-                .pin(&self.client.http)
-                .await
-                .expect("Failed to pin saved for later message!");
+            if let Err(e) = message.pin(&self.client.http).await {
+                error!("Failed to pin message {}: {}", message.id, e);
+            }
         }
 
         if message_content.trim() == message.content.trim() {
@@ -283,10 +289,9 @@ impl DiscordAPI {
             edit_message = edit_message.content("");
         }
 
-        message
-            .edit(&self.client.http, edit_message)
-            .await
-            .expect("Failed to edit message!");
+        if let Err(e) = message.edit(&self.client.http, edit_message).await {
+            error!("Failed to edit save-for-later message {}: {}", message.id, e);
+        }
     }
 
     #[instrument(skip_all,
@@ -343,10 +348,18 @@ impl DiscordAPI {
             Ok(dm) => {
                 trace!("Found user {} with vote {}", user.id, vote + 1);
 
-                if !self.is_event_sent_in_dm(event_url, &dm).await {
-                    info!("Sent vote {} for user {}", user.id, vote + 1);
-                    self.send_user_review_in_dm(&vote_emojis[vote], event_embed, &dm)
-                        .await;
+                match self.is_event_sent_in_dm(event_url, &dm).await {
+                    Ok(false) => {
+                        info!("Sent vote {} for user {}", user.id, vote + 1);
+                        self.send_user_review_in_dm(&vote_emojis[vote], event_embed, &dm)
+                            .await;
+                    }
+                    Ok(true) => {
+                        trace!("Event already sent to user {}", user.id);
+                    }
+                    Err(_) => {
+                        // error already logged inside is_event_sent_in_dm
+                    }
                 }
             }
             Err(error) => {
@@ -370,7 +383,7 @@ impl DiscordAPI {
                 continue;
             }
 
-            let users_that_reacted: Vec<User> = event_message
+            let users_that_reacted: Vec<User> = match event_message
                 .reaction_users(
                     &self.client.http,
                     Custom {
@@ -386,7 +399,13 @@ impl DiscordAPI {
                     None,
                 )
                 .await
-                .expect("Couldn't get users that reacted!");
+            {
+                Ok(users) => users,
+                Err(e) => {
+                    error!("Failed to get reaction users for emoji '{}': {}", voting_emoji.name, e);
+                    continue;
+                }
+            };
 
             for user in users_that_reacted {
                 if user.id == self.own_user.id {
@@ -463,12 +482,18 @@ impl DiscordAPI {
 
         let embed = Self::create_user_review_embed(vote_emoji, event_embed, &comment, description);
 
-        dm.send_message(&self.client.http, CreateMessage::new().embed(embed))
+        match dm
+            .send_message(&self.client.http, CreateMessage::new().embed(embed))
             .await
-            .expect("Failed to send message");
-
-        if let Some(comment) = comment {
-            self.add_reaction_to_message(&comment, '✅').await;
+        {
+            Ok(_) => {
+                if let Some(comment) = comment {
+                    self.add_reaction_to_message(&comment, '✅').await;
+                }
+            }
+            Err(e) => {
+                error!("Failed to send review DM to {}: {}", dm.recipient.name, e);
+            }
         }
     }
 
@@ -519,10 +544,13 @@ impl DiscordAPI {
     }
 
     #[instrument(skip(self, dm), fields(dm_id = %dm.id.to_string()))]
-    async fn is_event_sent_in_dm(&self, event_url: &str, dm: &PrivateChannel) -> bool {
+    async fn is_event_sent_in_dm(
+        &self,
+        event_url: &str,
+        dm: &PrivateChannel,
+    ) -> Result<bool, serenity::Error> {
         let mut last_message_id: Option<MessageId> = None;
         let mut searched_all_dms = false;
-        let mut is_found = false;
 
         while !searched_all_dms {
             let mut filter = GetMessages::default();
@@ -534,7 +562,10 @@ impl DiscordAPI {
             let messages_iter = dm
                 .messages(&self.client.http, filter)
                 .await
-                .expect("Couldn't get dm message!");
+                .map_err(|e| {
+                    error!("Failed to fetch DM messages for '{}': {}", dm.recipient.name, e);
+                    e
+                })?;
 
             if messages_iter.iter().any(|msg| {
                 msg.embeds
@@ -543,8 +574,7 @@ impl DiscordAPI {
                     .unwrap_or_default()
                     == event_url
             }) {
-                is_found = true;
-                break;
+                return Ok(true);
             }
 
             match messages_iter.first() {
@@ -555,7 +585,7 @@ impl DiscordAPI {
             }
         }
 
-        is_found
+        Ok(false)
     }
 
     #[instrument(skip(self, channel_id), fields(channel_id = %channel_id.to_string()))]
