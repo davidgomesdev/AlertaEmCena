@@ -404,7 +404,7 @@ mod discord {
                 .get_date_thread(&active_threads, *channel_id, date)
                 .await;
             let message = api.send_event(thread.thread_id, event, None, "").await;
-            (thread, message)
+            (thread, message.expect("Message should have worked!"))
         }
 
         pub fn generate_random_event(test_name: &str) -> (String, Event, NaiveDate) {

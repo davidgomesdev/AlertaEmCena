@@ -308,14 +308,17 @@ async fn send_new_events(
 
             async {
                 let ticket_url = config.venue_ticket_shop_url.get(&event.venue).cloned();
-                let message = discord
+                let message = match discord
                     .send_event(
                         thread.thread_id,
                         event,
                         ticket_url,
                         &config.ticket_shop_icon_url,
                     )
-                    .await;
+                    .await {
+                    Ok(msg) => msg,
+                    Err(_) => { return }
+                };
 
                 if config.debug_config.skip_feature_reactions {
                     info!("Skipping feature reactions");
