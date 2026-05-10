@@ -13,7 +13,6 @@ use serenity::all::{
 };
 use serenity::builder::{CreateEmbed, CreateMessage, EditMessage};
 use serenity::cache::Settings;
-use serenity::model::error::Error;
 use serenity::model::id::ChannelId;
 use serenity::prelude::SerenityError;
 use serenity::Client;
@@ -49,6 +48,11 @@ pub struct DiscordAPI {
     pub own_user: CurrentUser,
 }
 
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub enum DiscordError {
+    Api,
+}
+
 impl DiscordAPI {
     pub async fn default() -> Self {
         DiscordAPI::new(
@@ -78,10 +82,7 @@ impl DiscordAPI {
 
         debug!("Own user id is {}", own_user.id);
 
-        Self {
-            client,
-            own_user,
-        }
+        Self { client, own_user }
     }
 
     pub async fn get_messages(&self, channel_id: ChannelId) -> Vec<Message> {
@@ -100,27 +101,28 @@ impl DiscordAPI {
         event: Event,
         ticket_shop_url: Option<String>,
         ticket_shop_icon_url: &str,
-    ) -> Message {
+    ) -> Result<Message, DiscordError> {
         info!("Sending event");
 
         let mut description = event.details.description;
 
         if event.is_for_children {
-            description = format!("{}\n\n{}", description.clone(), CHILDREN_LABEL);
+            description = format!("{}\n\n{CHILDREN_LABEL}", description.clone());
         }
 
         let mut author = CreateEmbedAuthor::new(&event.venue);
 
         if let Some(ticket_shop_url) = ticket_shop_url {
-            author = author
-                .url(ticket_shop_url)
-                .icon_url(ticket_shop_icon_url);
+            author = author.url(ticket_shop_url).icon_url(ticket_shop_icon_url);
         }
 
+        let embed_description = Self::truncate_embed_description(description);
+        let embed_title = event.title.clone();
+
         let embed = CreateEmbed::new()
-            .title(event.title)
+            .title(embed_title)
             .url(event.link)
-            .description(description.clone())
+            .description(embed_description)
             .author(author)
             .color(Colour::new(0x005eeb))
             .field("Datas", event.occurring_at.dates, true)
@@ -128,33 +130,13 @@ impl DiscordAPI {
 
         let message_builder = CreateMessage::new().add_embed(embed.clone());
 
-        match channel_id
+        channel_id
             .send_message(&self.client.http, message_builder)
             .await
-        {
-            Ok(message) => message,
-            Err(err) => {
-                if let serenity::Error::Model(Error::EmbedTooLarge(_)) = err {
-                    info!("Couldn't send embed with full description, retrying with a shorter description");
-
-                    let first_line = description.lines().next();
-                    let short_description: String = first_line
-                        .unwrap_or(&description)
-                        .chars()
-                        .take(4000)
-                        .collect();
-                    let message_builder =
-                        CreateMessage::new().add_embed(embed.description(short_description));
-
-                    channel_id
-                        .send_message(&self.client.http, message_builder)
-                        .await
-                        .expect("Failed to send message")
-                } else {
-                    panic!("Failed sending message due to '{}'", err);
-                }
-            }
-        }
+            .map_err(|err| {
+                error!("Failed sending event '{}' due to '{}'", event.title, err);
+                DiscordError::Api
+            })
     }
 
     #[instrument(skip(self, message, emoji))]
@@ -290,7 +272,10 @@ impl DiscordAPI {
         }
 
         if let Err(e) = message.edit(&self.client.http, edit_message).await {
-            error!("Failed to edit save-for-later message {}: {}", message.id, e);
+            error!(
+                "Failed to edit save-for-later message {}: {}",
+                message.id, e
+            );
         }
     }
 
@@ -402,7 +387,10 @@ impl DiscordAPI {
             {
                 Ok(users) => users,
                 Err(e) => {
-                    error!("Failed to get reaction users for emoji '{}': {}", voting_emoji.name, e);
+                    error!(
+                        "Failed to get reaction users for emoji '{}': {}",
+                        voting_emoji.name, e
+                    );
                     continue;
                 }
             };
@@ -478,9 +466,8 @@ impl DiscordAPI {
         info!("Sending vote");
 
         let comment = self.get_user_last_comment(dm).await;
-        let description = event_embed.description.clone();
 
-        let embed = Self::create_user_review_embed(vote_emoji, event_embed, &comment, description);
+        let embed = Self::create_user_review_embed(vote_emoji, event_embed, &comment);
 
         match dm
             .send_message(&self.client.http, CreateMessage::new().embed(embed))
@@ -497,19 +484,15 @@ impl DiscordAPI {
         }
     }
 
-    #[instrument(skip(vote_emoji, event_embed, comment, description), fields(event_name = %event_embed.title.clone().unwrap_or_default()))]
+    #[instrument(skip(vote_emoji, event_embed, comment), fields(event_name = %event_embed.title.clone().unwrap_or_default()))]
     fn create_user_review_embed(
         vote_emoji: &EmojiConfig,
         event_embed: Embed,
         comment: &Option<Message>,
-        description: Option<String>,
     ) -> CreateEmbed {
         match &comment {
-            None => CreateEmbed::from(event_embed)
-                .description(description.unwrap())
-                .field("Voto", vote_emoji.to_string(), true),
+            None => CreateEmbed::from(event_embed).field("Voto", vote_emoji.to_string(), true),
             Some(comment) => CreateEmbed::from(event_embed)
-                .description(description.unwrap())
                 .field("Voto", vote_emoji.to_string(), true)
                 .field("Comentários", &comment.content, true),
         }
@@ -559,13 +542,13 @@ impl DiscordAPI {
                 filter = filter.before(last_message_id)
             }
 
-            let messages_iter = dm
-                .messages(&self.client.http, filter)
-                .await
-                .map_err(|e| {
-                    error!("Failed to fetch DM messages for '{}': {}", dm.recipient.name, e);
-                    e
-                })?;
+            let messages_iter = dm.messages(&self.client.http, filter).await.map_err(|e| {
+                error!(
+                    "Failed to fetch DM messages for '{}': {}",
+                    dm.recipient.name, e
+                );
+                e
+            })?;
 
             if messages_iter.iter().any(|msg| {
                 msg.embeds
@@ -734,6 +717,22 @@ impl DiscordAPI {
                         .expect("Failed to delete one of the messages individually");
                 }
             }
+        }
+    }
+
+    fn truncate_embed_description(description: String) -> String {
+        Self::truncate(description, 4096)
+    }
+
+    fn truncate(description: String, length: usize) -> String {
+        if description.len() > length {
+            let mut embed_description = description.clone();
+
+            embed_description.truncate(length);
+
+            format!("{embed_description}...")
+        } else {
+            description
         }
     }
 }
