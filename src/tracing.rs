@@ -1,6 +1,8 @@
+use crate::metrics::setup_metrics;
 use lazy_static::lazy_static;
 use opentelemetry::trace::TracerProvider;
 use opentelemetry_otlp::WithExportConfig;
+use opentelemetry_sdk::metrics::SdkMeterProvider;
 use opentelemetry_sdk::runtime;
 use opentelemetry_sdk::trace::TracerProvider as SdkTracerProvider;
 use std::str::FromStr;
@@ -25,10 +27,17 @@ pub struct TracingHandles {
     // Held so shutdown() can be called while the Tokio runtime is still alive.
     // If dropped without calling shutdown(), the batch exporter may lose buffered spans.
     pub otel_provider: Option<SdkTracerProvider>,
+    pub meter_provider: Option<SdkMeterProvider>,
 }
 
 impl TracingHandles {
     pub async fn shutdown(self) {
+        if let Some(provider) = self.meter_provider {
+            if let Err(e) = provider.shutdown() {
+                error!("Failed to flush OTel metrics: {}", e);
+            }
+        }
+
         if let Some(provider) = self.otel_provider {
             if let Err(e) = provider.shutdown() {
                 error!("Failed to flush OTel traces: {}", e);
@@ -109,13 +118,14 @@ async fn is_loki_reachable(url: &Url) -> bool {
 }
 
 pub async fn setup_tracing() -> TracingHandles {
+    let app_log_level = env::var("APP_LOG_LEVEL").unwrap_or_else(|_| "debug".to_string());
+    let app_log_level = Level::from_str(&app_log_level).unwrap_or_else(|_| {
+        warn!("Invalid APP_LOG_LEVEL value, falling back to DEBUG");
+        Level::DEBUG
+    });
+
     let filter = filter::Targets::new()
-        .with_target(
-            "alertaemcena",
-            Level::from_str(&env::var("APP_LOG_LEVEL")
-                .unwrap_or_else(|_| "debug".to_string()))
-                .expect("Unknown log level provided"),
-        )
+        .with_target("alertaemcena", app_log_level)
         .with_default(Level::WARN);
 
     let loki_url = LOKI_URL
@@ -145,6 +155,7 @@ pub async fn setup_tracing() -> TracingHandles {
         Some((layer, provider)) => (Some(layer), Some(provider)),
         None => (None, None),
     };
+    let meter_provider = OTLP_ENDPOINT.as_deref().and_then(setup_metrics);
 
     let loki_handle = loki_url.filter(|_| loki_reachable).map(build_loki_layer);
 
@@ -169,6 +180,7 @@ pub async fn setup_tracing() -> TracingHandles {
             TracingHandles {
                 loki: Some((controller, handle)),
                 otel_provider,
+                meter_provider,
             }
         }
         None => {
@@ -185,6 +197,7 @@ pub async fn setup_tracing() -> TracingHandles {
             TracingHandles {
                 loki: None,
                 otel_provider,
+                meter_provider,
             }
         }
     }

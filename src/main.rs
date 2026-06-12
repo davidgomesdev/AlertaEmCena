@@ -5,6 +5,11 @@ use alertaemcena::config::env_loader::load_config;
 use alertaemcena::config::model::{Config, EmojiConfig};
 use alertaemcena::discord::api::{DiscordAPI, EventsThread};
 use alertaemcena::discord::backup::{backup_user_votes, VoteRecord};
+use alertaemcena::metrics::{
+    record_event_send_duration, record_event_sent, record_events_fetched, record_pipeline_error,
+    record_pipeline_run_duration, record_reaction_processing_duration, record_vote_backup_duration,
+    record_vote_backup_records, set_threads_active, MetricResult, PipelineErrorKind, PipelineStage,
+};
 use alertaemcena::tracing::setup_tracing;
 use chrono::Utc;
 use futures::{future, TryFutureExt};
@@ -13,6 +18,7 @@ use lazy_static::lazy_static;
 use serenity::all::{ChannelId, GuildChannel, MessageType, UserId};
 use std::collections::BTreeMap;
 use std::process::exit;
+use std::time::Instant;
 use tokio::fs;
 use tokio::fs::File;
 use tokio::io::AsyncWriteExt;
@@ -84,19 +90,24 @@ async fn run(
     category: Category,
     channel_id: ChannelId,
 ) -> Vec<UserId> {
+    let pipeline_started_at = Instant::now();
     let guild = discord.get_guild(channel_id).await;
     let threads = discord.get_channel_threads(&guild, channel_id).await;
+    set_threads_active(&category, threads.len() as u64);
     let mut users_with_reactions = Vec::new();
 
     if !config.debug_config.skip_feature_reactions {
+        let reaction_started_at = Instant::now();
         users_with_reactions =
             handle_reaction_features(discord, threads, &config.voting_emojis).await;
+        record_reaction_processing_duration(&category, reaction_started_at.elapsed());
     }
 
     info!("Handled reaction features");
 
     if !config.gather_new_events {
         info!("Set to not gather new events");
+        record_pipeline_run_duration(&category, pipeline_started_at.elapsed());
         return users_with_reactions;
     }
 
@@ -105,6 +116,8 @@ async fn run(
 
     if let Err(err) = events {
         error!("Failed getting events. Reason: {:?}", err);
+        record_pipeline_error(PipelineStage::FetchEvents, PipelineErrorKind::Api);
+        record_pipeline_run_duration(&category, pipeline_started_at.elapsed());
 
         return users_with_reactions;
     }
@@ -113,22 +126,29 @@ async fn run(
 
     if events.is_empty() {
         error!("No events found");
+        record_pipeline_error(PipelineStage::FetchEvents, PipelineErrorKind::EmptyResult);
+        record_pipeline_run_duration(&category, pipeline_started_at.elapsed());
         return users_with_reactions;
     }
+
+    let fetched_count: usize = events.values().map(|events| events.len()).sum();
+    record_events_fetched(&category, fetched_count as u64);
 
     let new_events = filter_new_events_by_thread(discord, &guild, events, channel_id).await;
 
     info!("Filtered new events");
 
-    send_new_events(discord, new_events, config).await;
+    send_new_events(discord, new_events, config, &category).await;
 
     info!("Finished sending new events for {}", category);
+    record_pipeline_run_duration(&category, pipeline_started_at.elapsed());
 
     users_with_reactions
 }
 
 #[instrument(skip(discord))]
 pub async fn backup_votes(discord: &DiscordAPI, vec: Vec<UserId>) {
+    let backup_started_at = Instant::now();
     let vote_backups_folder = "vote_backups/";
     let vote_backup_file_path = format!(
         "{}{}.json",
@@ -146,6 +166,7 @@ pub async fn backup_votes(discord: &DiscordAPI, vec: Vec<UserId>) {
         })
         .unwrap_or_else(|e| {
             error!("Failed to create vote backups folder! Error: {}", e);
+            record_pipeline_error(PipelineStage::BackupVotes, PipelineErrorKind::Io);
         })
         .await;
 
@@ -153,11 +174,14 @@ pub async fn backup_votes(discord: &DiscordAPI, vec: Vec<UserId>) {
         Ok(exists) => {
             if exists {
                 info!("Vote backup file already exists for today, skipping backup");
+                record_vote_backup_duration(MetricResult::Ok, backup_started_at.elapsed());
                 return;
             }
         }
         Err(e) => {
             error!("Failed to check if vote backup file exists! Error: {}", e);
+            record_pipeline_error(PipelineStage::BackupVotes, PipelineErrorKind::Io);
+            record_vote_backup_duration(MetricResult::Error, backup_started_at.elapsed());
             return;
         }
     }
@@ -170,6 +194,7 @@ pub async fn backup_votes(discord: &DiscordAPI, vec: Vec<UserId>) {
     .into_iter()
     .flatten()
     .concat();
+    record_vote_backup_records(user_votes.len() as u64);
 
     let backup_votes_file = File::create(&vote_backup_file_path).await;
 
@@ -178,20 +203,35 @@ pub async fn backup_votes(discord: &DiscordAPI, vec: Vec<UserId>) {
             "Failed to create vote backup file at {}! Error: {}",
             vote_backup_file_path, err
         );
+        record_pipeline_error(PipelineStage::BackupVotes, PipelineErrorKind::Io);
+        record_vote_backup_duration(MetricResult::Error, backup_started_at.elapsed());
         return;
     }
 
+    let serialized_votes = match serde_json::to_vec_pretty(&user_votes) {
+        Ok(v) => v,
+        Err(e) => {
+            error!("Failed to serialize user votes! Error: {}", e);
+            record_pipeline_error(PipelineStage::BackupVotes, PipelineErrorKind::Serialize);
+            record_vote_backup_duration(MetricResult::Error, backup_started_at.elapsed());
+            return;
+        }
+    };
+
     let write_return = backup_votes_file
         .unwrap()
-        .write_all(&serde_json::to_vec_pretty(&user_votes).expect("Failed to serialize user votes"))
+        .write_all(&serialized_votes)
         .await;
 
     if let Err(e) = write_return {
         error!("Failed to write vote backup file! Error: {}", e);
+        record_pipeline_error(PipelineStage::BackupVotes, PipelineErrorKind::Io);
+        record_vote_backup_duration(MetricResult::Error, backup_started_at.elapsed());
         return;
     }
 
     info!("Vote backup file written to {}", vote_backup_file_path);
+    record_vote_backup_duration(MetricResult::Ok, backup_started_at.elapsed());
 }
 
 /// Returns users who have used reaction features in the given threads
@@ -274,6 +314,7 @@ async fn send_new_events(
     discord: &DiscordAPI,
     new_events: BTreeMap<EventsThread, Vec<Event>>,
     config: &Config,
+    category: &Category,
 ) {
     if new_events.is_empty() {
         info!("No new events to send");
@@ -299,6 +340,7 @@ async fn send_new_events(
         for event in events {
             async {
                 let ticket_url = config.venue_ticket_shop_url.get(&event.venue).cloned();
+                let send_started_at = Instant::now();
                 let message = match discord
                     .send_event(
                         thread.thread_id,
@@ -306,9 +348,19 @@ async fn send_new_events(
                         ticket_url,
                         &config.ticket_shop_icon_url,
                     )
-                    .await {
-                    Ok(msg) => msg,
-                    Err(_) => { return }
+                    .await
+                {
+                    Ok(msg) => {
+                        record_event_sent(category, MetricResult::Ok);
+                        record_event_send_duration(category, send_started_at.elapsed());
+                        msg
+                    }
+                    Err(_) => {
+                        record_event_sent(category, MetricResult::Error);
+                        record_event_send_duration(category, send_started_at.elapsed());
+                        record_pipeline_error(PipelineStage::SendEvents, PipelineErrorKind::Api);
+                        return;
+                    }
                 };
 
                 if config.debug_config.skip_feature_reactions {
