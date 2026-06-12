@@ -3,6 +3,7 @@ use opentelemetry::trace::TracerProvider;
 use opentelemetry_otlp::WithExportConfig;
 use opentelemetry_sdk::runtime;
 use opentelemetry_sdk::trace::TracerProvider as SdkTracerProvider;
+use std::str::FromStr;
 use std::time::Duration;
 use std::{env, io};
 use tokio::task::JoinHandle;
@@ -74,14 +75,12 @@ fn build_otlp(
                 .tonic()
                 .with_endpoint(endpoint),
         )
-        .with_trace_config(
-            opentelemetry_sdk::trace::Config::default().with_resource(
-                opentelemetry_sdk::Resource::new(vec![opentelemetry::KeyValue::new(
-                    "service.name",
-                    "alertaemcena",
-                )]),
-            ),
-        )
+        .with_trace_config(opentelemetry_sdk::trace::Config::default().with_resource(
+            opentelemetry_sdk::Resource::new(vec![opentelemetry::KeyValue::new(
+                "service.name",
+                "alertaemcena",
+            )]),
+        ))
         .install_batch(runtime::Tokio);
 
     match result {
@@ -91,7 +90,10 @@ fn build_otlp(
             Some((layer, provider))
         }
         Err(e) => {
-            warn!("Failed to build OTLP exporter: {}. Continuing without it.", e);
+            warn!(
+                "Failed to build OTLP exporter: {}. Continuing without it.",
+                e
+            );
             None
         }
     }
@@ -108,7 +110,12 @@ async fn is_loki_reachable(url: &Url) -> bool {
 
 pub async fn setup_tracing() -> TracingHandles {
     let filter = filter::Targets::new()
-        .with_target("alertaemcena", Level::TRACE)
+        .with_target(
+            "alertaemcena",
+            Level::from_str(&env::var("APP_LOG_LEVEL")
+                .unwrap_or_else(|_| "debug".to_string()))
+                .expect("Unknown log level provided"),
+        )
         .with_default(Level::WARN);
 
     let loki_url = LOKI_URL
@@ -127,16 +134,19 @@ pub async fn setup_tracing() -> TracingHandles {
     }
 
     let (otel_layer, otel_provider): (
-        Option<tracing_opentelemetry::OpenTelemetryLayer<tracing_subscriber::Registry, opentelemetry_sdk::trace::Tracer>>,
+        Option<
+            tracing_opentelemetry::OpenTelemetryLayer<
+                tracing_subscriber::Registry,
+                opentelemetry_sdk::trace::Tracer,
+            >,
+        >,
         Option<SdkTracerProvider>,
     ) = match OTLP_ENDPOINT.as_deref().and_then(build_otlp) {
         Some((layer, provider)) => (Some(layer), Some(provider)),
         None => (None, None),
     };
 
-    let loki_handle = loki_url
-        .filter(|_| loki_reachable)
-        .map(build_loki_layer);
+    let loki_handle = loki_url.filter(|_| loki_reachable).map(build_loki_layer);
 
     // Option<L> implements Layer<S> when L: Layer<S>, so these are no-op when None.
     // OTel layer goes innermost (first .with()) — only implements Layer<Registry>, not Layer<Layered<...>>.

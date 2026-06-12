@@ -204,7 +204,7 @@ async fn handle_reaction_features(
     let mut users_with_reactions = Vec::new();
 
     for thread in threads {
-        let thread_span = info_span!("process_thread", thread = %thread.name);
+        let thread_span = info_span!("process_thread_reactions", thread = %thread.name);
 
         async {
             let Some(meta) = thread.thread_metadata else {
@@ -297,15 +297,6 @@ async fn send_new_events(
         );
 
         for event in events {
-            let event_span = info_span!(
-                "send_event",
-                title = %event.title,
-                venue = %event.venue,
-                link = %event.link,
-                dates = %event.occurring_at.dates,
-                is_for_children = %event.is_for_children,
-            );
-
             async {
                 let ticket_url = config.venue_ticket_shop_url.get(&event.venue).cloned();
                 let message = match discord
@@ -333,7 +324,6 @@ async fn send_new_events(
                 )
                 .await;
             }
-            .instrument(event_span)
             .await;
         }
     }

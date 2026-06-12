@@ -93,8 +93,6 @@ impl DiscordAPI {
             .await
     }
 
-    #[instrument(skip(self, channel_id), fields(channel_id = %channel_id.to_string(), event = %event.title.to_string()
-    ))]
     pub async fn send_event(
         &self,
         channel_id: ChannelId,
@@ -102,7 +100,11 @@ impl DiscordAPI {
         ticket_shop_url: Option<String>,
         ticket_shop_icon_url: &str,
     ) -> Result<Message, DiscordError> {
-        info!("Sending event");
+        info!(
+            "Sending event",
+            channel_id = channel_id.to_string(),
+            event = event.title.to_string()
+        );
 
         let mut description = event.details.description;
 
@@ -182,15 +184,19 @@ impl DiscordAPI {
             .await
     }
 
-    #[instrument(
-        skip(self, message),
-        fields(event = %message.embeds.first()
-            .map(|embed| embed.url.clone().unwrap()).unwrap_or_default()
-    ))]
     pub async fn add_reaction_to_message(&self, message: &Message, emoji_char: char) {
         let react_result = message
             .react(&self.client.http, ReactionType::from(emoji_char))
             .await;
+
+        debug!(
+            "Added reaction {emoji_char} to message",
+            event_url = message.embeds.first().map_or_else(
+                || "No embed".to_string(),
+                |embed| embed.url.clone().unwrap_or_else(|| "No URL".to_string())
+            ),
+            message_id = message.id.to_string()
+        );
 
         if let Err(e) = react_result {
             let msg = &format!("Failed to add reaction {} to message", emoji_char);
@@ -201,11 +207,6 @@ impl DiscordAPI {
         }
     }
 
-    #[instrument(
-        skip(self, message),
-        fields(event = %message.embeds.first()
-            .map(|embed| embed.url.clone().unwrap()).unwrap_or_default()
-    ))]
     pub async fn tag_save_for_later_reactions(&self, message: &mut Message, emoji_char: char) {
         let save_for_later_reaction = ReactionType::from(emoji_char);
 
@@ -279,10 +280,6 @@ impl DiscordAPI {
         }
     }
 
-    #[instrument(skip_all,
-        fields(event = %event_message.embeds.first()
-            .map(|embed| embed.url.clone().unwrap()).unwrap_or_default()
-    ))]
     pub async fn send_privately_users_review(
         &self,
         event_message: &Message,
@@ -456,14 +453,18 @@ impl DiscordAPI {
         false
     }
 
-    #[instrument(skip(self, vote_emoji, event_embed, dm), fields(user_name = %dm.recipient.name.to_string(), vote = %vote_emoji.name.to_string(), event_url = event_embed.url))]
     async fn send_user_review_in_dm(
         &self,
         vote_emoji: &EmojiConfig,
         event_embed: Embed,
         dm: &PrivateChannel,
     ) {
-        info!("Sending vote");
+        info!(
+            "Sending vote",
+            user_name = dm.recipient.name.to_string(),
+            vote_emoji = vote_emoji,
+            event = event_embed.title
+        );
 
         let comment = self.get_user_last_comment(dm).await;
 
@@ -484,7 +485,6 @@ impl DiscordAPI {
         }
     }
 
-    #[instrument(skip(vote_emoji, event_embed, comment), fields(event_name = %event_embed.title.clone().unwrap_or_default()))]
     fn create_user_review_embed(
         vote_emoji: &EmojiConfig,
         event_embed: Embed,
