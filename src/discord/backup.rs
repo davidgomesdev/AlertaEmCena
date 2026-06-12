@@ -8,10 +8,7 @@ pub async fn backup_user_votes(discord: &DiscordAPI, user_id: UserId) -> Option<
     let dm_channel = user_id.create_dm_channel(&discord.client.http).await;
 
     if let Err(err) = dm_channel {
-        error!(
-            "Failed to create DM channel! Error: {}",
-            err
-        );
+        error!("Failed to create DM channel! Error: {}", err);
         return None;
     }
 
@@ -21,10 +18,7 @@ pub async fn backup_user_votes(discord: &DiscordAPI, user_id: UserId) -> Option<
         .await;
 
     if let Err(err) = messages {
-        error!(
-            "Failed to get messages from DM channel! Error: {}",
-            err
-        );
+        error!("Failed to get messages from DM channel! Error: {}", err);
         return None;
     }
 

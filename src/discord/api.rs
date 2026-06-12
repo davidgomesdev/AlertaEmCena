@@ -1,5 +1,6 @@
 use crate::agenda_cultural::model::Event;
 use crate::config::model::EmojiConfig;
+use crate::metrics::{record_dm_review_sent, MetricResult};
 use chrono::{Datelike, NaiveDate};
 use futures::{StreamExt, TryStreamExt};
 use itertools::Itertools;
@@ -100,11 +101,7 @@ impl DiscordAPI {
         ticket_shop_url: Option<String>,
         ticket_shop_icon_url: &str,
     ) -> Result<Message, DiscordError> {
-        info!(
-            "Sending event",
-            channel_id = channel_id.to_string(),
-            event = event.title.to_string()
-        );
+        info!(channel_id = %channel_id, event = %event.title, "Sending event");
 
         let mut description = event.details.description;
 
@@ -190,12 +187,14 @@ impl DiscordAPI {
             .await;
 
         debug!(
-            "Added reaction {emoji_char} to message",
-            event_url = message.embeds.first().map_or_else(
-                || "No embed".to_string(),
-                |embed| embed.url.clone().unwrap_or_else(|| "No URL".to_string())
-            ),
-            message_id = message.id.to_string()
+            emoji = %emoji_char,
+            event_url = %message
+                .embeds
+                .first()
+                .and_then(|embed| embed.url.as_deref())
+                .unwrap_or("no_url"),
+            message_id = %message.id,
+            "Added reaction to message"
         );
 
         if let Err(e) = react_result {
@@ -460,10 +459,10 @@ impl DiscordAPI {
         dm: &PrivateChannel,
     ) {
         info!(
-            "Sending vote",
-            user_name = dm.recipient.name.to_string(),
-            vote_emoji = vote_emoji,
-            event = event_embed.title
+            user_name = %dm.recipient.name,
+            vote_emoji = %vote_emoji,
+            event = %event_embed.title.as_deref().unwrap_or("no_title"),
+            "Sending vote"
         );
 
         let comment = self.get_user_last_comment(dm).await;
@@ -475,11 +474,13 @@ impl DiscordAPI {
             .await
         {
             Ok(_) => {
+                record_dm_review_sent(MetricResult::Ok);
                 if let Some(comment) = comment {
                     self.add_reaction_to_message(&comment, '✅').await;
                 }
             }
             Err(e) => {
+                record_dm_review_sent(MetricResult::Error);
                 error!("Failed to send review DM to {}: {}", dm.recipient.name, e);
             }
         }
