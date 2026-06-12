@@ -33,7 +33,7 @@ reqwest-middleware = "0.4.0"
 scraper = "0.19"
 
 # Discord
-serenity = "0.12.4"
+serenity = "=0.12.4"
 
 # Utils
 uuid = { version = "1.11.1", features = ["v4"] }
