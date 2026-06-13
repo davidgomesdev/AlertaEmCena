@@ -4,7 +4,7 @@ use crate::discord::api::{DiscordAPI, EventsThread};
 use chrono::NaiveDate;
 use serenity::all::{ChannelId, GuildChannel, Message, PartialGuild};
 use std::collections::BTreeMap;
-use tracing::{debug, info, instrument, trace};
+use tracing::{debug, trace};
 
 pub async fn filter_new_events_by_thread(
     discord: &DiscordAPI,
