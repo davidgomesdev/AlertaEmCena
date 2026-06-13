@@ -71,7 +71,6 @@ impl AgendaCulturalAPI {
         Ok(events)
     }
 
-    #[instrument(skip_all)]
     async fn parse_events_by_date(response: Vec<EventResponse>) -> BTreeMap<NaiveDate, Vec<Event>> {
         let mut events_by_date: BTreeMap<NaiveDate, Vec<Event>> = BTreeMap::new();
 
@@ -125,7 +124,7 @@ impl AgendaCulturalAPI {
             .unwrap();
             let mut min_date = Utc::now().date_naive().with_day(1).unwrap();
 
-            trace!("Filling up until {:?}", max_date);
+            info!("Filling up until {:?}", max_date);
             while min_date.cmp(&max_date) != Ordering::Greater {
                 events_by_date.insert(min_date, Vec::from([]));
                 trace!("Going for {:?}", min_date);
@@ -134,7 +133,6 @@ impl AgendaCulturalAPI {
         }
     }
 
-    #[instrument(skip(response), fields(event = %response.link))]
     async fn convert_response_to_model(response: &EventResponse) -> Event {
         let description = Self::get_full_description(&response.link)
             .await

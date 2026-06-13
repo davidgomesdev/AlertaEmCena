@@ -4,9 +4,8 @@ use crate::discord::api::{DiscordAPI, EventsThread};
 use chrono::NaiveDate;
 use serenity::all::{ChannelId, GuildChannel, Message, PartialGuild};
 use std::collections::BTreeMap;
-use tracing::{info, instrument, trace};
+use tracing::{debug, info, instrument, trace};
 
-#[instrument(skip_all)]
 pub async fn filter_new_events_by_thread(
     discord: &DiscordAPI,
     guild: &PartialGuild,
@@ -37,7 +36,6 @@ pub async fn filter_new_events_by_thread(
         .collect()
 }
 
-#[instrument(skip_all, fields(thread_count = %threads.len()))]
 async fn get_sent_events(discord: &DiscordAPI, threads: &[GuildChannel]) -> Vec<String> {
     let mut sent_events = Vec::new();
 
@@ -46,7 +44,7 @@ async fn get_sent_events(discord: &DiscordAPI, threads: &[GuildChannel]) -> Vec<
 
         sent_events.append(&mut thread_events);
 
-        info!(
+        debug!(
             "Thread '{}' has {} sent events",
             thread.name,
             sent_events.len()
@@ -55,7 +53,6 @@ async fn get_sent_events(discord: &DiscordAPI, threads: &[GuildChannel]) -> Vec<
     sent_events
 }
 
-#[instrument(skip_all, fields(month_count = %events.len()))]
 async fn get_threads_by_month(
     discord: &DiscordAPI,
     channel_id: ChannelId,

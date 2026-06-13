@@ -33,7 +33,6 @@ pub async fn backup_user_votes(discord: &DiscordAPI, user_id: UserId) -> Option<
     Some(messages)
 }
 
-#[instrument(skip_all)]
 fn extract_vote(discord: &DiscordAPI, user_id: UserId, message: &Message) -> Option<VoteRecord> {
     if message.author.id != discord.own_user.id
         || message.kind != MessageType::Regular

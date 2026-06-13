@@ -138,7 +138,6 @@ impl DiscordAPI {
             })
     }
 
-    #[instrument(skip(self, message, emoji))]
     pub async fn add_custom_reaction(&self, message: &Message, emoji: &EmojiConfig) {
         trace!("Adding reaction");
 
@@ -499,7 +498,6 @@ impl DiscordAPI {
         }
     }
 
-    #[instrument(skip(self, dm), fields(user_name = %dm.recipient.name.to_string()))]
     async fn get_user_last_comment(&self, dm: &PrivateChannel) -> Option<Message> {
         match dm.last_message_id {
             Some(last_message_id) => {
@@ -527,7 +525,6 @@ impl DiscordAPI {
         }
     }
 
-    #[instrument(skip(self, dm), fields(dm_id = %dm.id.to_string()))]
     async fn is_event_sent_in_dm(
         &self,
         event_url: &str,
@@ -572,7 +569,6 @@ impl DiscordAPI {
         Ok(false)
     }
 
-    #[instrument(skip(self, channel_id), fields(channel_id = %channel_id.to_string()))]
     pub async fn get_guild(&self, channel_id: ChannelId) -> PartialGuild {
         let guild_channel = channel_id
             .to_channel(&self.client.http)
@@ -587,7 +583,6 @@ impl DiscordAPI {
             .unwrap()
     }
 
-    #[instrument(skip_all, fields(guild_id = %guild.id.to_string(), channel_id = %channel_id.to_string()))]
     pub async fn get_channel_threads(
         &self,
         guild: &PartialGuild,
@@ -638,7 +633,6 @@ impl DiscordAPI {
         threads.iter().map(|thread| thread.name.as_str()).join(",")
     }
 
-    #[instrument(skip(self, threads, channel_id), fields(thread_count = %threads.len(), channel_id = %channel_id.to_string()))]
     pub async fn get_date_thread(
         &self,
         threads: &[GuildChannel],
@@ -668,7 +662,6 @@ impl DiscordAPI {
         )
     }
 
-    #[instrument(skip(self, channel_id), fields(channel_id = %channel_id.to_string()))]
     pub async fn get_event_urls_sent(&self, channel_id: ChannelId) -> Vec<String> {
         channel_id
             .messages_iter(&self.client.http)
@@ -682,7 +675,6 @@ impl DiscordAPI {
             .collect()
     }
 
-    #[instrument(skip(self, channel_id), fields(channel_id = %channel_id.to_string()))]
     pub async fn delete_all_messages(&self, channel_id: &ChannelId) {
         let messages = channel_id
             .messages_iter(&self.client.http)
@@ -703,7 +695,6 @@ impl DiscordAPI {
         }
     }
 
-    #[instrument(skip(self, channel_id, messages), fields(message_count = %messages.len(), channel_id = %channel_id.to_string()))]
     async fn delete_messages(&self, channel_id: &ChannelId, messages: &[Message]) {
         for chunk in messages.chunks(100) {
             debug!("Deleting {} messages", chunk.len());
