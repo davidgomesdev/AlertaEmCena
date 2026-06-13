@@ -135,6 +135,11 @@ lazy_static! {
         .with_description("Duration of reaction processing phase")
         .with_unit("s")
         .init();
+    static ref GET_EVENTS_BY_MONTH_DURATION_SECONDS: Histogram<f64> = METER
+        .f64_histogram("aec_get_events_by_month_duration_seconds")
+        .with_description("Duration of AgendaCulturalAPI::get_events_by_month call")
+        .with_unit("s")
+        .init();
     static ref DM_REVIEW_SENT_TOTAL: Counter<u64> = METER
         .u64_counter("aec_dm_review_sent_total")
         .with_description("Total DM review send attempts")
@@ -177,6 +182,10 @@ pub fn record_event_send_duration(category: &Category, duration: Duration) {
 
 pub fn record_reaction_processing_duration(category: &Category, duration: Duration) {
     REACTION_PROCESSING_DURATION_SECONDS.record(duration.as_secs_f64(), &[category.into()]);
+}
+
+pub fn record_get_events_by_month_duration(category: &Category, duration: Duration) {
+    GET_EVENTS_BY_MONTH_DURATION_SECONDS.record(duration.as_secs_f64(), &[category.into()]);
 }
 
 pub fn record_dm_review_sent(result: MetricResult) {

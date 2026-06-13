@@ -7,9 +7,10 @@ use alertaemcena::discord::api::{DiscordAPI, EventsThread};
 use alertaemcena::discord::backup::{backup_user_votes, VoteRecord};
 use alertaemcena::metrics::{
     record_event_send_duration, record_event_sent, record_events_fetched, record_pipeline_error,
-    record_pipeline_run_duration, record_pipeline_run_duration_without_event_gather,
-    record_reaction_processing_duration, record_vote_backup_duration, record_vote_backup_records,
-    set_threads_active, MetricResult, PipelineErrorKind, PipelineStage,
+    record_get_events_by_month_duration, record_pipeline_run_duration,
+    record_pipeline_run_duration_without_event_gather, record_reaction_processing_duration,
+    record_vote_backup_duration, record_vote_backup_records, set_threads_active, MetricResult,
+    PipelineErrorKind, PipelineStage,
 };
 use alertaemcena::tracing::setup_tracing;
 use chrono::Utc;
@@ -119,8 +120,10 @@ async fn run(
         return users_with_reactions;
     }
 
+    let get_events_started_at = Instant::now();
     let events =
         AgendaCulturalAPI::get_events_by_month(&category, config.debug_config.event_limit).await;
+    record_get_events_by_month_duration(&category, get_events_started_at.elapsed());
 
     if let Err(err) = events {
         error!("Failed getting events. Reason: {:?}", err);
