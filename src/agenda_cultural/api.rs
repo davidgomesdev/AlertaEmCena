@@ -1,5 +1,4 @@
 use super::{dto::EventResponse, model::Event};
-use crate::agenda_cultural::dto::SingleEventResponse;
 use crate::agenda_cultural::model::Category;
 use chrono::{Datelike, NaiveDate, TimeDelta, Utc};
 use futures::TryFutureExt;
@@ -14,11 +13,11 @@ use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::ops::Add;
 use std::time::Duration;
-use tracing::{debug, info, instrument, trace, warn};
+use strum::Display;
+use tracing::{debug, error, info, instrument, trace, warn};
 use voca_rs::strip::strip_tags;
 
 const AGENDA_EVENTS_URL: &str = "https://www.agendalx.pt/wp-json/agendalx/v1/events";
-const AGENDA_PAGE_BY_ID_PATH: &str = "https://www.agendalx.pt/?p=";
 const EVENT_TYPE: &str = "event";
 const DATE_PRINT_FORMAT: &str = "%Y-%m-%d";
 
@@ -31,11 +30,6 @@ lazy_static! {
                 .build_with_total_retry_duration_and_max_retries(Duration::from_secs(30))
         ))
         .build();
-    static ref EVENT_ID_SELECTOR: Selector = Selector::parse(&format!(
-        r#"link[rel="shortlink"][href^="{}"]"#,
-        AGENDA_PAGE_BY_ID_PATH
-    ))
-    .unwrap();
     static ref EVENT_DESCRIPTION_SELECTOR: Selector =
         Selector::parse(".entry-container > :not(.event__extra-info):not(.section-title):not(.section-title--venue):not(.venue):not(.post__share)").unwrap();
 }
@@ -47,7 +41,7 @@ impl AgendaCulturalAPI {
     Returns events in ascending order
     * amount_per_page: if not specified, will retrieve everything
     */
-    #[tracing::instrument]
+    #[instrument]
     pub async fn get_events_by_month(
         category: &Category,
         amount_per_page: Option<i32>,
@@ -62,7 +56,11 @@ impl AgendaCulturalAPI {
         }
 
         let category: &'static str = category.into();
-        let parsed_response = Self::get_events_by_category(amount_per_page, category).await?;
+        let parsed_response = Self::get_events_by_category(amount_per_page, category)
+            .await
+            .inspect_err(|err| {
+                error!("Failed to get events by category '{}': {}", category, err)
+            })?;
 
         info!("Fetched {} events", parsed_response.len());
 
@@ -149,63 +147,7 @@ impl AgendaCulturalAPI {
         response.to_model(description).await
     }
 
-    /**
-    Returns the specified event
-    */
-    #[tracing::instrument]
-    pub async fn get_event_by_id(event_id: u32) -> Result<Event, APIError> {
-        let json_response = REST_CLIENT
-            .get(format!("{}/{}", AGENDA_EVENTS_URL, event_id))
-            .send()
-            .await
-            .map_err(APIError::ErrorSending)?
-            .error_for_status()
-            .map_err(APIError::ResponseError)?
-            .text()
-            .map_err(APIError::InvalidResponse)
-            .await?;
-        trace!("Json response: {json_response}");
-
-        let parsed_response = serde_json::from_str::<SingleEventResponse>(&json_response)
-            .map_err(APIError::ParseError)?;
-
-        Ok(Self::convert_response_to_model(&parsed_response.event).await)
-    }
-
-    /**
-    Returns the specified event
-    */
-    #[tracing::instrument]
-    pub async fn get_event_by_public_url(url: &str) -> Result<Event, APIError> {
-        let full_page: String = REST_CLIENT
-            .get(url)
-            .send()
-            .map_err(APIError::ErrorSending)
-            .await?
-            .error_for_status()
-            .map_err(APIError::ResponseError)?
-            .text()
-            .map_err(APIError::InvalidResponse)
-            .await?;
-        let page_html = Html::parse_fragment(&full_page);
-        let id_element = page_html
-            .select(&EVENT_ID_SELECTOR)
-            .next()
-            .ok_or_else(|| {
-                APIError::FailedParsingHtml("Could not find ID element in page!".to_string())
-            })?
-            .attr("href")
-            .and_then(|href| href.strip_prefix(AGENDA_PAGE_BY_ID_PATH))
-            .ok_or_else(|| {
-                APIError::FailedParsingHtml("Could not find ID in the element!".to_string())
-            })?
-            .parse()
-            .map_err(|_| APIError::FailedParsingHtml("Fetched ID is not valid!".to_string()))?;
-
-        Self::get_event_by_id(id_element).await
-    }
-
-    #[tracing::instrument]
+    #[instrument]
     async fn get_events_by_category(
         amount_per_page: Option<i32>,
         category: &str,
@@ -377,7 +319,7 @@ mod tests {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Display)]
 pub enum APIError {
     ErrorSending(reqwest_middleware::Error),
     ResponseError(reqwest::Error),
