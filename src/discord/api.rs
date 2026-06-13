@@ -20,7 +20,7 @@ use serenity::Client;
 use std::env;
 use std::fmt::Debug;
 use tracing::field::debug;
-use tracing::{debug, error, info, instrument, trace, warn};
+use tracing::{debug, error, info, trace, warn};
 
 const PORTUGUESE_MONTHS: [&str; 12] = [
     "Janeiro",
