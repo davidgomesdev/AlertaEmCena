@@ -7,8 +7,9 @@ use alertaemcena::discord::api::{DiscordAPI, EventsThread};
 use alertaemcena::discord::backup::{backup_user_votes, VoteRecord};
 use alertaemcena::metrics::{
     record_event_send_duration, record_event_sent, record_events_fetched, record_pipeline_error,
-    record_pipeline_run_duration, record_reaction_processing_duration, record_vote_backup_duration,
-    record_vote_backup_records, set_threads_active, MetricResult, PipelineErrorKind, PipelineStage,
+    record_pipeline_run_duration, record_pipeline_run_duration_without_event_gather,
+    record_reaction_processing_duration, record_vote_backup_duration, record_vote_backup_records,
+    set_threads_active, MetricResult, PipelineErrorKind, PipelineStage,
 };
 use alertaemcena::tracing::setup_tracing;
 use chrono::Utc;
@@ -35,49 +36,56 @@ async fn main() {
     {
         let _shutdown_hook = ShutdownHook;
 
-        let config = load_config();
+        let root_span = info_span!("run");
 
-        debug!("Loaded {:?}", config);
+        async move {
+            let config = load_config();
 
-        let discord = DiscordAPI::default().await;
+            debug!("Loaded {:?}", config);
 
-        if config.debug_config.clear_channel {
-            discord.delete_all_messages(&config.teatro_channel_id).await;
-            discord.delete_all_messages(&config.artes_channel_id).await;
+            let discord = DiscordAPI::default().await;
 
-            if config.debug_config.exit_after_clearing {
-                exit(0)
+            if config.debug_config.clear_channel {
+                discord.delete_all_messages(&config.teatro_channel_id).await;
+                discord.delete_all_messages(&config.artes_channel_id).await;
+
+                if config.debug_config.exit_after_clearing {
+                    exit(0)
+                }
             }
-        }
 
-        let mut users_to_backup = Vec::new();
+            let mut users_to_backup = Vec::new();
 
-        if !config.debug_config.skip_artes {
-            run(&config, &discord, Category::Artes, config.artes_channel_id)
-                .instrument(info_span!("pipeline", category = "Artes"))
-                .await
-                .iter()
-                .for_each(|u| {
+            if !config.debug_config.skip_artes {
+                run(&config, &discord, Category::Artes, config.artes_channel_id)
+                    .instrument(info_span!("pipeline", category = "Artes"))
+                    .await
+                    .iter()
+                    .for_each(|u| {
+                        users_to_backup.push(*u);
+                    })
+            }
+
+            run(
+                &config,
+                &discord,
+                Category::Teatro,
+                config.teatro_channel_id,
+            )
+            .instrument(info_span!("pipeline", category = "Teatro"))
+            .await
+            .iter()
+            .for_each(|u| {
+                if !users_to_backup.contains(u) {
                     users_to_backup.push(*u);
-                })
+                }
+            });
+
+            backup_votes(&discord, users_to_backup).await;
+            info!("Starting app");
         }
-
-        run(
-            &config,
-            &discord,
-            Category::Teatro,
-            config.teatro_channel_id,
-        )
-        .instrument(info_span!("pipeline", category = "Teatro"))
-        .await
-        .iter()
-        .for_each(|u| {
-            if !users_to_backup.contains(u) {
-                users_to_backup.push(*u);
-            }
-        });
-
-        backup_votes(&discord, users_to_backup).await;
+        .instrument(root_span)
+        .await;
     }
 
     tracing_handles.shutdown().await;
@@ -107,7 +115,7 @@ async fn run(
 
     if !config.gather_new_events {
         info!("Set to not gather new events");
-        record_pipeline_run_duration(&category, pipeline_started_at.elapsed());
+        record_pipeline_run_duration_without_event_gather(&category, pipeline_started_at.elapsed());
         return users_with_reactions;
     }
 
