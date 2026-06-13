@@ -6,8 +6,8 @@ use alertaemcena::config::model::{Config, EmojiConfig};
 use alertaemcena::discord::api::{DiscordAPI, EventsThread};
 use alertaemcena::discord::backup::{backup_user_votes, VoteRecord};
 use alertaemcena::metrics::{
-    record_event_send_duration, record_event_sent, record_events_fetched, record_pipeline_error,
-    record_get_events_by_month_duration, record_pipeline_run_duration,
+    record_event_send_duration, record_event_sent, record_events_fetched,
+    record_get_events_by_month_duration, record_pipeline_error, record_pipeline_run_duration,
     record_pipeline_run_duration_without_event_gather, record_reaction_processing_duration,
     record_vote_backup_duration, record_vote_backup_records, set_threads_active, MetricResult,
     PipelineErrorKind, PipelineStage,
@@ -145,7 +145,9 @@ async fn run(
     let fetched_count: usize = events.values().map(|events| events.len()).sum();
     record_events_fetched(&category, fetched_count as u64);
 
-    let new_events = filter_new_events_by_thread(discord, &guild, events, channel_id).await;
+    let new_events = filter_new_events_by_thread(discord, &guild, events, channel_id)
+        .instrument(info_span!("filter_new_events"))
+        .await;
 
     info!("Filtered new events");
 
