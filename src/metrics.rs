@@ -191,8 +191,12 @@ pub fn record_vote_backup_duration(result: MetricResult, duration: Duration) {
     VOTE_BACKUP_DURATION_SECONDS.record(duration.as_secs_f64(), &[result.into()]);
 }
 
+pub fn record_pipeline_run_duration_without_event_gather(category: &Category, duration: Duration) {
+    PIPELINE_RUN_DURATION_SECONDS.record(duration.as_secs_f64(), &[category.into(), KeyValue::new("gathered_events", false)]);
+}
+
 pub fn record_pipeline_run_duration(category: &Category, duration: Duration) {
-    PIPELINE_RUN_DURATION_SECONDS.record(duration.as_secs_f64(), &[category.into()]);
+    PIPELINE_RUN_DURATION_SECONDS.record(duration.as_secs_f64(), &[category.into(), KeyValue::new("gathered_events", true)]);
 }
 
 pub fn record_pipeline_error(stage: PipelineStage, error_kind: PipelineErrorKind) {
