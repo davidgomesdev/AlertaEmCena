@@ -1,6 +1,9 @@
 use alertaemcena::agenda_cultural::model::Category;
-use alertaemcena::metrics::{MetricResult, PipelineErrorKind, PipelineStage};
+use alertaemcena::metrics::{
+    record_get_events_by_month_duration, MetricResult, PipelineErrorKind, PipelineStage,
+};
 use opentelemetry::KeyValue;
+use std::time::Duration;
 
 #[test]
 fn should_convert_metric_enums_to_labels_using_to_string() {
@@ -32,4 +35,9 @@ fn should_convert_metric_dimensions_into_key_value() {
 
     assert_eq!(error_kv.key.as_str(), "error_kind");
     assert_eq!(error_kv.value.to_string(), "serialize");
+}
+
+#[test]
+fn should_record_get_events_by_month_duration_metric() {
+    record_get_events_by_month_duration(&Category::Teatro, Duration::from_millis(250));
 }
