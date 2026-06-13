@@ -106,7 +106,6 @@ impl AgendaCulturalAPI {
         events_by_date
     }
 
-    #[instrument(skip_all)]
     fn fill_incoming_months(
         response: &[EventResponse],
         events_by_date: &mut BTreeMap<NaiveDate, Vec<Event>>,
