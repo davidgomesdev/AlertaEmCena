@@ -8,12 +8,6 @@ use serde_json::Value;
 use std::collections::{BTreeMap, HashSet};
 use tracing::warn;
 
-#[derive(Debug, Deserialize)]
-pub struct SingleEventResponse {
-    #[serde(rename = "data")]
-    pub event: EventResponse,
-}
-
 // Note: some String fields need the custom deserializer due to being optional
 #[derive(Debug, Deserialize)]
 pub struct EventResponse {
@@ -39,7 +33,6 @@ lazy_static! {
 }
 
 impl EventResponse {
-    #[tracing::instrument(skip(self), fields(self.link = %self.link))]
     pub async fn to_model(&self, description: String) -> Event {
         let subtitle = match self.subtitle.clone() {
             SingleOrVec::Single(subtitle) => subtitle,
