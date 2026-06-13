@@ -59,7 +59,6 @@ async fn main() {
 
             if !config.debug_config.skip_artes {
                 run(&config, &discord, Category::Artes, config.artes_channel_id)
-                    .instrument(info_span!("pipeline", category = "Artes"))
                     .await
                     .iter()
                     .for_each(|u| {
@@ -73,7 +72,6 @@ async fn main() {
                 Category::Teatro,
                 config.teatro_channel_id,
             )
-            .instrument(info_span!("pipeline", category = "Teatro"))
             .await
             .iter()
             .for_each(|u| {
