@@ -37,7 +37,7 @@ async fn main() {
     {
         let _shutdown_hook = ShutdownHook;
 
-        let root_span = info_span!("run");
+        let root_span = info_span!("main");
 
         async move {
             let config = load_config();
