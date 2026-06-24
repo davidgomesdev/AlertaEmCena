@@ -10,7 +10,7 @@ use serenity::all::ReactionType::{Custom, Unicode};
 use serenity::all::{
     AutoArchiveDuration, ChannelType, Colour, CreateEmbedAuthor, CreateThread, CurrentUser,
     EditThread, Embed, GatewayIntents, GetMessages, GuildChannel, Message, MessageId,
-    MessageReaction, PartialGuild, PrivateChannel, ReactionType, User, UserId,
+    MessageReaction, MessageType, PartialGuild, PrivateChannel, ReactionType, User, UserId,
 };
 use serenity::builder::{CreateEmbed, CreateMessage, EditMessage};
 use serenity::cache::Settings;
@@ -205,7 +205,12 @@ impl DiscordAPI {
         }
     }
 
-    pub async fn tag_save_for_later_reactions(&self, message: &mut Message, emoji_char: char) {
+    /// Returns whether this call resulted in the message being newly pinned.
+    pub async fn tag_save_for_later_reactions(
+        &self,
+        message: &mut Message,
+        emoji_char: char,
+    ) -> bool {
         let save_for_later_reaction = ReactionType::from(emoji_char);
 
         // Is empty ensures no one has ever saved for later,
@@ -215,7 +220,7 @@ impl DiscordAPI {
             && Self::has_no_user_emoji_reaction(message, &emoji_char.to_string())
         {
             trace!("No user has ever saved for later");
-            return;
+            return false;
         }
 
         let saved_for_later_user_ids: Vec<String> = match message
@@ -229,13 +234,13 @@ impl DiscordAPI {
                 .collect(),
             Err(e) => {
                 error!("Failed to get save-for-later reaction users: {}", e);
-                return;
+                return false;
             }
         };
 
         if saved_for_later_user_ids.is_empty() && message.content.is_empty() {
             trace!("No users saved for later");
-            return;
+            return false;
         }
 
         let mentions = saved_for_later_user_ids
@@ -245,6 +250,8 @@ impl DiscordAPI {
             .join(" ");
         let message_content = format!("Interessados: {}", mentions);
 
+        let mut newly_pinned = false;
+
         if saved_for_later_user_ids.is_empty() && message.pinned {
             if let Err(e) = message.unpin(&self.client.http).await {
                 error!("Failed to unpin message {}: {}", message.id, e);
@@ -252,14 +259,15 @@ impl DiscordAPI {
         }
 
         if !saved_for_later_user_ids.is_empty() && !message.pinned {
-            if let Err(e) = message.pin(&self.client.http).await {
-                error!("Failed to pin message {}: {}", message.id, e);
+            match message.pin(&self.client.http).await {
+                Ok(_) => newly_pinned = true,
+                Err(e) => error!("Failed to pin message {}: {}", message.id, e),
             }
         }
 
         if message_content.trim() == message.content.trim() {
             trace!("No new users saved for later");
-            return;
+            return newly_pinned;
         }
 
         info!("Saved for later changed to '{}'", mentions);
@@ -275,6 +283,59 @@ impl DiscordAPI {
                 "Failed to edit save-for-later message {}: {}",
                 message.id, e
             );
+        }
+
+        newly_pinned
+    }
+
+    /// Deletes the "X pinned a message" system message(s) left behind after pinning,
+    /// for a thread where `pin_count` pins were performed in this run.
+    pub async fn delete_pin_notifications(&self, channel_id: ChannelId, pin_count: usize) {
+        if pin_count == 0 {
+            return;
+        }
+
+        let mut pin_notifications = self.find_pin_notifications(channel_id, pin_count).await;
+
+        if pin_notifications.is_empty() {
+            tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+            pin_notifications = self.find_pin_notifications(channel_id, pin_count).await;
+        }
+
+        if pin_notifications.is_empty() {
+            warn!(
+                "Could not find pin notification message(s) in channel {} after retry, ignoring",
+                channel_id
+            );
+            return;
+        }
+
+        for message in pin_notifications {
+            if let Err(e) = message.delete(&self.client.http).await {
+                error!(
+                    "Failed to delete pin notification message {}: {}",
+                    message.id, e
+                );
+            }
+        }
+    }
+
+    async fn find_pin_notifications(&self, channel_id: ChannelId, limit: usize) -> Vec<Message> {
+        match channel_id
+            .messages(&self.client.http, GetMessages::new().limit(limit as u8))
+            .await
+        {
+            Ok(messages) => messages
+                .into_iter()
+                .filter(|m| m.kind == MessageType::PinsAdd)
+                .collect(),
+            Err(e) => {
+                error!(
+                    "Failed to fetch messages from channel {} to find pin notification: {}",
+                    channel_id, e
+                );
+                Vec::new()
+            }
         }
     }
 

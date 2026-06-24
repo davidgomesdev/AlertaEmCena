@@ -293,6 +293,8 @@ async fn handle_reaction_features(
                 messages.len()
             );
 
+            let mut pin_count = 0usize;
+
             for mut message in messages {
                 if message.author != *discord.own_user {
                     debug!(
@@ -315,9 +317,12 @@ async fn handle_reaction_features(
                     continue;
                 }
 
-                discord
+                if discord
                     .tag_save_for_later_reactions(&mut message, *SAVE_FOR_LATER_EMOJI)
-                    .await;
+                    .await
+                {
+                    pin_count += 1;
+                }
 
                 discord
                     .send_privately_users_review(&message, vote_emojis)
@@ -329,6 +334,10 @@ async fn handle_reaction_features(
                         }
                     });
             }
+
+            discord
+                .delete_pin_notifications(thread.id, pin_count)
+                .await;
         }
         .instrument(thread_span)
         .await;
