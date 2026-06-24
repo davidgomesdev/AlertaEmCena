@@ -1,6 +1,6 @@
 use crate::agenda_cultural::model::Event;
 use crate::config::model::EmojiConfig;
-use crate::metrics::{record_dm_review_sent, MetricResult};
+use crate::metrics::{record_dm_review_rewrite, record_dm_review_sent, MetricResult};
 use chrono::{Datelike, NaiveDate};
 use futures::{StreamExt, TryStreamExt};
 use itertools::Itertools;
@@ -38,6 +38,7 @@ const PORTUGUESE_MONTHS: [&str; 12] = [
 ];
 
 const CHILDREN_LABEL: &str = "🧸 para crianças";
+const PROCESSED_COMMENT_EMOJI: char = '✅';
 
 lazy_static! {
     static ref USER_MENTION_REGEX: Regex =
@@ -483,6 +484,16 @@ impl DiscordAPI {
         }
     }
 
+    fn message_has_bot_reaction(reactions: &[MessageReaction], emoji_char: &str) -> bool {
+        reactions.iter().any(|reaction| {
+            if let Unicode(char) = &reaction.reaction_type {
+                *char == emoji_char && reaction.me
+            } else {
+                false
+            }
+        })
+    }
+
     fn has_no_user_emoji_reaction(event_message: &Message, emoji_char: &str) -> bool {
         let reaction = event_message.reactions.iter().find(|reaction| {
             if let Unicode(char) = &reaction.reaction_type {
@@ -540,7 +551,8 @@ impl DiscordAPI {
             Ok(_) => {
                 record_dm_review_sent(MetricResult::Ok);
                 if let Some(comment) = comment {
-                    self.add_reaction_to_message(&comment, '✅').await;
+                    self.add_reaction_to_message(&comment, PROCESSED_COMMENT_EMOJI)
+                        .await;
                 }
             }
             Err(e) => {
@@ -621,6 +633,151 @@ impl DiscordAPI {
                 record_dm_review_sent(MetricResult::Error);
                 error!("Failed to send backfill review DM to {}: {}", user_id, e);
                 Err(())
+            }
+        }
+    }
+
+    pub async fn rewrite_reviews_from_dm_replies(&self, user_id: UserId) -> usize {
+        let dm = match user_id.create_dm_channel(&self.client.http).await {
+            Ok(dm) => dm,
+            Err(e) => {
+                warn!("Couldn't create DM channel for user '{}': {}", user_id, e);
+                return 0;
+            }
+        };
+
+        let mut messages = match self.fetch_all_dm_messages(&dm).await {
+            Ok(messages) => messages,
+            Err(_) => return 0,
+        };
+
+        // Snowflake IDs are chronologically ordered; sort ascending so the latest
+        // reply to any given review embed is always processed last.
+        messages.sort_by_key(|message| message.id);
+
+        let mut rewritten_count = 0;
+
+        for reply in &messages {
+            if !Self::is_message_a_rewrite_request(self.own_user.id, reply) {
+                continue;
+            }
+
+            if self.rewrite_review_from_reply(&dm, reply).await {
+                rewritten_count += 1;
+            }
+        }
+
+        rewritten_count
+    }
+
+    fn is_message_a_rewrite_request(own_user_id: UserId, reply: &Message) -> bool {
+        let is_a_user_message = reply.author.id != own_user_id;
+
+        is_a_user_message
+            && reply.referenced_message.as_ref().is_some_and(|referenced| {
+                let is_a_reply_to_bot_message = referenced.author.id == own_user_id;
+                let has_vote = referenced
+                    .embeds
+                    .first()
+                    .is_some_and(|embed| embed.fields.iter().any(|field| field.name == "Voto"));
+
+                is_a_reply_to_bot_message && has_vote
+            })
+            && !Self::message_has_bot_reaction(
+                &reply.reactions,
+                &PROCESSED_COMMENT_EMOJI.to_string(),
+            )
+    }
+
+    async fn fetch_all_dm_messages(
+        &self,
+        dm: &PrivateChannel,
+    ) -> Result<Vec<Message>, serenity::Error> {
+        let mut all_messages = Vec::new();
+        let mut last_message_id: Option<MessageId> = None;
+
+        loop {
+            let mut filter = GetMessages::default();
+
+            if let Some(id) = last_message_id {
+                filter = filter.before(id);
+            }
+
+            let page = dm.messages(&self.client.http, filter).await.map_err(|e| {
+                error!(
+                    "Failed to fetch DM messages for '{}': {}",
+                    dm.recipient.name, e
+                );
+                e
+            })?;
+
+            match page.first() {
+                None => break,
+                Some(message) => last_message_id = Some(message.id),
+            }
+
+            all_messages.extend(page);
+        }
+
+        Ok(all_messages)
+    }
+
+    async fn rewrite_review_from_reply(&self, dm: &PrivateChannel, reply: &Message) -> bool {
+        let referenced = reply
+            .referenced_message
+            .as_ref()
+            .expect("should not have landed here");
+
+        let embed = referenced
+            .embeds
+            .first()
+            .expect("should not have landed here");
+
+        let voto_value = embed
+            .fields
+            .iter()
+            .find(|field| field.name == "Voto")
+            .expect("should not have landed here")
+            .value
+            .clone();
+
+        let mut fresh = match self.client.http.get_message(dm.id, referenced.id).await {
+            Ok(message) => message,
+            Err(e) => {
+                error!(
+                    "Failed to refetch review message {} for user {}: {}",
+                    referenced.id, reply.author.id, e
+                );
+                return false;
+            }
+        };
+
+        let Some(mut fresh_embed) = fresh.embeds.first().cloned() else {
+            return false;
+        };
+        fresh_embed.fields = Vec::new();
+
+        let new_embed = CreateEmbed::from(fresh_embed)
+            .field("Voto", voto_value, true)
+            .field("Comentários", reply.content.clone(), true);
+
+        match fresh
+            .edit(&self.client.http, EditMessage::new().embed(new_embed))
+            .await
+        {
+            Ok(_) => {
+                record_dm_review_rewrite(MetricResult::Ok);
+                self.add_reaction_to_message(reply, PROCESSED_COMMENT_EMOJI)
+                    .await;
+                true
+            }
+            Err(e) => {
+                record_dm_review_rewrite(MetricResult::Error);
+                error!(
+                    "Failed to rewrite review message {} for user {}: {}",
+                    referenced.id, reply.author.id, e
+                );
+                false
             }
         }
     }
@@ -876,6 +1033,190 @@ impl DiscordAPI {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const BOT_USER_ID: u64 = 1;
+    const OTHER_USER_ID: u64 = 2;
+
+    fn build_message(author_id: u64, referenced_message: Option<serde_json::Value>) -> Message {
+        let json = serde_json::json!({
+            "id": "1",
+            "channel_id": "1",
+            "author": { "id": author_id.to_string(), "username": "user" },
+            "content": "",
+            "timestamp": "2024-01-01T00:00:00.000000+00:00",
+            "tts": false,
+            "mention_everyone": false,
+            "mentions": [],
+            "mention_roles": [],
+            "attachments": [],
+            "embeds": [],
+            "pinned": false,
+            "type": 0,
+            "referenced_message": referenced_message,
+        });
+
+        serde_json::from_value(json).expect("Failed to build test message")
+    }
+
+    fn build_review_embed(has_vote_field: bool) -> serde_json::Value {
+        let fields = if has_vote_field {
+            serde_json::json!([{ "name": "Voto", "value": "🟩", "inline": true }])
+        } else {
+            serde_json::json!([])
+        };
+
+        serde_json::json!({ "fields": fields })
+    }
+
+    fn build_reply_to_bot_review(
+        reply_author_id: u64,
+        has_vote_field: bool,
+        already_processed: bool,
+    ) -> Message {
+        let mut referenced = build_message(BOT_USER_ID, None);
+        referenced.embeds = vec![serde_json::from_value(build_review_embed(has_vote_field))
+            .expect("Failed to build test embed")];
+
+        let mut reply = build_message(reply_author_id, None);
+        reply.referenced_message = Some(Box::new(referenced));
+
+        if already_processed {
+            reply.reactions = serde_json::from_str(
+                r#"
+            [{
+              "count": 1,
+              "count_details": { "burst": 0, "normal": 1 },
+              "me": true,
+              "me_burst": false,
+              "emoji": { "id": null, "name": "✅" },
+              "burst_colors": []
+            }]
+            "#,
+            )
+            .expect("Failed to build test reaction");
+        }
+
+        reply
+    }
+
+    #[test_log::test]
+    fn when_reply_is_from_bot_itself_should_return_false() {
+        let reply = build_reply_to_bot_review(BOT_USER_ID, true, false);
+
+        assert!(!DiscordAPI::is_message_a_rewrite_request(
+            UserId::from(BOT_USER_ID),
+            &reply
+        ));
+    }
+
+    #[test_log::test]
+    fn when_message_is_not_a_reply_should_return_false() {
+        let reply = build_message(OTHER_USER_ID, None);
+
+        assert!(!DiscordAPI::is_message_a_rewrite_request(
+            UserId::from(BOT_USER_ID),
+            &reply
+        ));
+    }
+
+    #[test_log::test]
+    fn when_reply_is_not_to_a_bot_message_should_return_false() {
+        let referenced = build_message(OTHER_USER_ID, None);
+        let mut reply = build_message(OTHER_USER_ID, None);
+        reply.referenced_message = Some(Box::new(referenced));
+
+        assert!(!DiscordAPI::is_message_a_rewrite_request(
+            UserId::from(BOT_USER_ID),
+            &reply
+        ));
+    }
+
+    #[test_log::test]
+    fn when_referenced_bot_message_has_no_vote_field_should_return_false() {
+        let reply = build_reply_to_bot_review(OTHER_USER_ID, false, false);
+
+        assert!(!DiscordAPI::is_message_a_rewrite_request(
+            UserId::from(BOT_USER_ID),
+            &reply
+        ));
+    }
+
+    #[test_log::test]
+    fn when_reply_already_processed_should_return_false() {
+        let reply = build_reply_to_bot_review(OTHER_USER_ID, true, true);
+
+        assert!(!DiscordAPI::is_message_a_rewrite_request(
+            UserId::from(BOT_USER_ID),
+            &reply
+        ));
+    }
+
+    #[test_log::test]
+    fn when_reply_is_a_valid_unprocessed_rewrite_request_should_return_true() {
+        let reply = build_reply_to_bot_review(OTHER_USER_ID, true, false);
+
+        assert!(DiscordAPI::is_message_a_rewrite_request(
+            UserId::from(BOT_USER_ID),
+            &reply
+        ));
+    }
+
+    #[test_log::test]
+    fn when_bot_has_reacted_with_emoji_should_return_true() {
+        let reactions: Vec<MessageReaction> = serde_json::from_str(
+            r#"
+        [{
+          "count": 1,
+          "count_details": { "burst": 0, "normal": 1 },
+          "me": true,
+          "me_burst": false,
+          "emoji": { "id": null, "name": "✅" },
+          "burst_colors": []
+        }]
+        "#,
+        )
+        .unwrap();
+
+        assert!(DiscordAPI::message_has_bot_reaction(&reactions, "✅"));
+    }
+
+    #[test_log::test]
+    fn when_bot_has_not_reacted_with_emoji_should_return_false() {
+        let reactions: Vec<MessageReaction> = serde_json::from_str(
+            r#"
+        [{
+          "count": 1,
+          "count_details": { "burst": 0, "normal": 1 },
+          "me": false,
+          "me_burst": false,
+          "emoji": { "id": null, "name": "✅" },
+          "burst_colors": []
+        }]
+        "#,
+        )
+        .unwrap();
+
+        assert!(!DiscordAPI::message_has_bot_reaction(&reactions, "✅"));
+    }
+
+    #[test_log::test]
+    fn when_no_matching_emoji_reaction_should_return_false() {
+        let reactions: Vec<MessageReaction> = serde_json::from_str(
+            r#"
+        [{
+          "count": 1,
+          "count_details": { "burst": 0, "normal": 1 },
+          "me": true,
+          "me_burst": false,
+          "emoji": { "id": null, "name": "🔖" },
+          "burst_colors": []
+        }]
+        "#,
+        )
+        .unwrap();
+
+        assert!(!DiscordAPI::message_has_bot_reaction(&reactions, "✅"));
+    }
 
     #[test_log::test]
     fn when_no_user_has_voted_other_than_bot_should_return_true() {

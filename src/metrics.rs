@@ -144,6 +144,10 @@ lazy_static! {
         .u64_counter("aec_dm_review_sent_total")
         .with_description("Total DM review send attempts")
         .init();
+    static ref DM_REVIEW_REWRITE_TOTAL: Counter<u64> = METER
+        .u64_counter("aec_dm_review_rewrite_total")
+        .with_description("Total DM review rewrite attempts")
+        .init();
     static ref VOTE_BACKUP_RECORDS_TOTAL: Counter<u64> = METER
         .u64_counter("aec_vote_backup_records_total")
         .with_description("Total vote records written to backups")
@@ -194,6 +198,10 @@ pub fn record_get_events_by_month_duration(category: &Category, duration: Durati
 
 pub fn record_dm_review_sent(result: MetricResult) {
     DM_REVIEW_SENT_TOTAL.add(1, &[result.into()]);
+}
+
+pub fn record_dm_review_rewrite(result: MetricResult) {
+    DM_REVIEW_REWRITE_TOTAL.add(1, &[result.into()]);
 }
 
 pub fn record_vote_backup_records(count: u64) {
