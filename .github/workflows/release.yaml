@@ -38,7 +38,7 @@ jobs:
         working-directory: .
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
 
     - name: 🦀 - Install Rust
       run: |
@@ -71,7 +71,7 @@ jobs:
     if: github.ref_name == 'main' && github.event_name == 'push'
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
 
     - name: 📦 - Copy binary artifacts
       uses: actions/download-artifact@v4
