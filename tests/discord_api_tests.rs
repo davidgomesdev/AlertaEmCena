@@ -182,6 +182,40 @@ mod discord {
     }
 
     #[test_log::test(tokio::test)]
+    async fn should_delete_pin_notification_after_pinning() {
+        let api = build_api().await;
+        let (thread_id, _, mut message) = send_random_event(
+            &api,
+            "should_delete_pin_notification_after_pinning",
+        )
+        .await;
+
+        let tester_api = build_tester_api().await;
+
+        tester_api
+            .add_reaction_to_message(&message, *SAVE_FOR_LATER_EMOJI)
+            .await;
+
+        let pinned = api
+            .tag_save_for_later_reactions(&mut message, *SAVE_FOR_LATER_EMOJI)
+            .await;
+
+        assert!(pinned);
+
+        api.delete_pin_notifications(thread_id, 1).await;
+
+        let pin_notifications = thread_id
+            .messages(&api.client.http, serenity::all::GetMessages::new().limit(1))
+            .await
+            .expect("Failed to fetch thread messages")
+            .into_iter()
+            .filter(|msg| msg.kind == serenity::all::MessageType::PinsAdd)
+            .count();
+
+        assert_eq!(pin_notifications, 0);
+    }
+
+    #[test_log::test(tokio::test)]
     async fn should_send_the_voted_event_message_via_dm_only_once() {
         let api = build_api().await;
         let (_, _, message) =
