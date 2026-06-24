@@ -12,9 +12,9 @@ jobs:
       code: ${{ steps.filter.outputs.code }}
       workflows: ${{ steps.filter.outputs.workflows }}
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
 
-    - uses: dorny/paths-filter@v2
+    - uses: dorny/paths-filter@v3
       id: filter
       with:
         filters: |
@@ -39,7 +39,7 @@ jobs:
     steps:
     - uses: rui314/setup-mold@v1
 
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
 
     - uses: Swatinem/rust-cache@v2
       with:
