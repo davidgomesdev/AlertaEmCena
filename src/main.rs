@@ -9,8 +9,8 @@ use alertaemcena::metrics::{
     record_event_send_duration, record_event_sent, record_events_fetched,
     record_get_events_by_month_duration, record_pipeline_error, record_pipeline_run_duration,
     record_pipeline_run_duration_without_event_gather, record_reaction_processing_duration,
-    record_vote_backup_duration, record_vote_backup_records, set_threads_active, MetricResult,
-    PipelineErrorKind, PipelineStage,
+    record_vote, record_vote_backup_duration, record_vote_backup_records, set_threads_active,
+    MetricResult, PipelineErrorKind, PipelineStage,
 };
 use alertaemcena::tracing::setup_tracing;
 use chrono::Utc;
@@ -80,7 +80,7 @@ async fn main() {
                 }
             });
 
-            backup_votes(&discord, users_to_backup).await;
+            backup_votes(&discord, users_to_backup, &config.voting_emojis).await;
             info!("Starting app");
         }
         .instrument(root_span)
@@ -157,8 +157,8 @@ async fn run(
     users_with_reactions
 }
 
-#[instrument(skip(discord))]
-pub async fn backup_votes(discord: &DiscordAPI, vec: Vec<UserId>) {
+#[instrument(skip(discord, vote_emojis))]
+pub async fn backup_votes(discord: &DiscordAPI, vec: Vec<UserId>, vote_emojis: &[EmojiConfig; 5]) {
     let backup_started_at = Instant::now();
     let vote_backups_folder = "vote_backups/";
     let vote_backup_file_path = format!(
@@ -205,6 +205,24 @@ pub async fn backup_votes(discord: &DiscordAPI, vec: Vec<UserId>) {
     .into_iter()
     .flatten()
     .concat();
+
+    for vote_record in &user_votes {
+        match vote_emojis
+            .iter()
+            .position(|emoji| emoji.to_string() == vote_record.user_vote.vote)
+        {
+            Some(index) => record_vote(
+                index as u64 + 1,
+                &vote_record.user_id.to_string(),
+                &vote_record.url,
+            ),
+            None => warn!(
+                "Unrecognized vote emoji '{}' for user {}",
+                vote_record.user_vote.vote, vote_record.user_id
+            ),
+        }
+    }
+
     record_vote_backup_records(user_votes.len() as u64);
 
     let backup_votes_file = File::create(&vote_backup_file_path).await;
