@@ -527,7 +527,11 @@ impl DiscordAPI {
 
         let comment = self.get_user_last_comment(dm).await;
 
-        let embed = Self::create_user_review_embed(vote_emoji, event_embed, &comment);
+        let embed = Self::create_user_review_embed(
+            vote_emoji,
+            event_embed,
+            comment.as_ref().map(|m| m.content.as_str()),
+        );
 
         match dm
             .send_message(&self.client.http, CreateMessage::new().embed(embed))
@@ -549,14 +553,93 @@ impl DiscordAPI {
     fn create_user_review_embed(
         vote_emoji: &EmojiConfig,
         event_embed: Embed,
-        comment: &Option<Message>,
+        comment: Option<&str>,
     ) -> CreateEmbed {
-        match &comment {
+        match comment {
             None => CreateEmbed::from(event_embed).field("Voto", vote_emoji.to_string(), true),
             Some(comment) => CreateEmbed::from(event_embed)
                 .field("Voto", vote_emoji.to_string(), true)
-                .field("Comentários", &comment.content, true),
+                .field("Comentários", comment, true),
         }
+    }
+
+    /// Sends a review DM identical in format to `send_user_review_in_dm`, but with an
+    /// explicit comment string instead of reading the user's last DM message.
+    /// Used to backfill historical reviews that predate (or bypassed) the normal
+    /// reaction -> DM flow.
+    pub async fn send_backfill_review(
+        &self,
+        user_id: UserId,
+        event_url: &str,
+        vote_emoji: &EmojiConfig,
+        comment: Option<&str>,
+        channel_ids: &[ChannelId],
+    ) -> Result<bool, ()> {
+        let mut event_embed = None;
+
+        for channel_id in channel_ids {
+            if let Some(found) = self.find_event_embed(*channel_id, event_url).await {
+                event_embed = Some(found);
+                break;
+            }
+        }
+
+        let Some(event_embed) = event_embed else {
+            warn!("Could not find event message for url '{}'", event_url);
+            return Ok(false);
+        };
+
+        let dm = match user_id.create_dm_channel(&self.client.http).await {
+            Ok(dm) => dm,
+            Err(e) => {
+                error!("Couldn't create DM channel for user '{}': {}", user_id, e);
+                return Err(());
+            }
+        };
+
+        match self.is_event_sent_in_dm(event_url, &dm).await {
+            Ok(true) => {
+                warn!("Event already sent to user {}", user_id);
+                return Ok(false);
+            }
+            Err(_) => return Err(()),
+            Ok(false) => {}
+        }
+
+        let embed = Self::create_user_review_embed(vote_emoji, event_embed, comment);
+
+        match dm
+            .send_message(&self.client.http, CreateMessage::new().embed(embed))
+            .await
+        {
+            Ok(_) => {
+                record_dm_review_sent(MetricResult::Ok);
+                info!("Backfilled review for event '{}'", event_url);
+                Ok(true)
+            }
+            Err(e) => {
+                record_dm_review_sent(MetricResult::Error);
+                error!("Failed to send backfill review DM to {}: {}", user_id, e);
+                Err(())
+            }
+        }
+    }
+
+    async fn find_event_embed(&self, channel_id: ChannelId, event_url: &str) -> Option<Embed> {
+        let guild = self.get_guild(channel_id).await;
+        let threads = self.get_channel_threads(&guild, channel_id).await;
+
+        for thread in threads {
+            let messages = self.get_all_messages(thread.id).await;
+
+            if let Some(message) = messages.into_iter().find(|m| {
+                m.embeds.first().and_then(|e| e.url.clone()).as_deref() == Some(event_url)
+            }) {
+                return message.embeds.into_iter().next();
+            }
+        }
+
+        None
     }
 
     async fn get_user_last_comment(&self, dm: &PrivateChannel) -> Option<Message> {

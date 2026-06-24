@@ -3,6 +3,10 @@ name = "alertaemcena"
 version = "0.1.0"
 edition = "2021"
 
+[[bin]]
+name = "backfill_reviews"
+path = "scripts/backfill_reviews.rs"
+
 [dependencies]
 # Rust++
 voca_rs = "1.15.2"
