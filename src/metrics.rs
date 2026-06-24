@@ -166,6 +166,10 @@ lazy_static! {
         .u64_gauge("aec_threads_active")
         .with_description("Current active thread count per category")
         .init();
+    static ref VOTE: Gauge<u64> = METER
+        .u64_gauge("aec_vote")
+        .with_description("Vote number (1-5) cast by a voter")
+        .init();
 }
 
 pub fn record_events_fetched(category: &Category, count: u64) {
@@ -220,4 +224,14 @@ pub fn record_pipeline_error(stage: PipelineStage, error_kind: PipelineErrorKind
 
 pub fn set_threads_active(category: &Category, count: u64) {
     THREADS_ACTIVE.record(count, &[category.into()]);
+}
+
+pub fn record_vote(vote_number: u64, voter: &str, event_url: &str) {
+    VOTE.record(
+        vote_number,
+        &[
+            KeyValue::new("voter", voter.to_string()),
+            KeyValue::new("event_url", event_url.to_string()),
+        ],
+    );
 }
