@@ -651,9 +651,10 @@ impl DiscordAPI {
             Err(_) => return 0,
         };
 
-        // Snowflake IDs are chronologically ordered; sort ascending so the latest
-        // reply to any given review embed is always processed last.
-        messages.sort_by_key(|message| message.id);
+        // fetch_all_dm_messages returns newest-to-oldest with no gaps or overlaps;
+        // reverse to oldest-first so the latest reply to any given review embed is
+        // always processed last.
+        messages.reverse();
 
         let mut rewritten_count = 0;
 
@@ -711,9 +712,9 @@ impl DiscordAPI {
                 e
             })?;
 
-            match page.first() {
+            match page.last() {
                 None => break,
-                Some(message) => last_message_id = Some(message.id),
+                Some(oldest_in_page) => last_message_id = Some(oldest_in_page.id),
             }
 
             all_messages.extend(page);
@@ -859,11 +860,11 @@ impl DiscordAPI {
                 return Ok(true);
             }
 
-            match messages_iter.first() {
+            match messages_iter.last() {
                 None => {
                     searched_all_dms = true;
                 }
-                Some(last_message) => last_message_id = Some(last_message.id),
+                Some(oldest_in_page) => last_message_id = Some(oldest_in_page.id),
             }
         }
 
