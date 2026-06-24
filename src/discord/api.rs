@@ -1,3 +1,4 @@
+use crate::agenda_cultural::api::AgendaCulturalAPI;
 use crate::agenda_cultural::model::Event;
 use crate::config::model::EmojiConfig;
 use crate::metrics::{record_dm_review_rewrite, record_dm_review_sent, MetricResult};
@@ -17,6 +18,7 @@ use serenity::cache::Settings;
 use serenity::model::id::ChannelId;
 use serenity::prelude::SerenityError;
 use serenity::Client;
+use std::collections::HashMap;
 use std::env;
 use std::fmt::Debug;
 use tracing::field::debug;
@@ -104,6 +106,25 @@ impl DiscordAPI {
     ) -> Result<Message, DiscordError> {
         info!(channel_id = %channel_id, event = %event.title, "Sending event");
 
+        let title = event.title.clone();
+        let embed = Self::build_event_embed(event, ticket_shop_url, ticket_shop_icon_url);
+
+        let message_builder = CreateMessage::new().add_embed(embed.clone());
+
+        channel_id
+            .send_message(&self.client.http, message_builder)
+            .await
+            .map_err(|err| {
+                error!("Failed sending event '{}' due to '{}'", title, err);
+                DiscordError::Api
+            })
+    }
+
+    fn build_event_embed(
+        event: Event,
+        ticket_shop_url: Option<String>,
+        ticket_shop_icon_url: &str,
+    ) -> CreateEmbed {
         let mut description = event.details.description;
 
         if event.is_for_children {
@@ -117,26 +138,15 @@ impl DiscordAPI {
         }
 
         let embed_description = Self::truncate_embed_description(description);
-        let embed_title = event.title.clone();
 
-        let embed = CreateEmbed::new()
-            .title(embed_title)
+        CreateEmbed::new()
+            .title(event.title)
             .url(event.link)
             .description(embed_description)
             .author(author)
             .color(Colour::new(0x005eeb))
             .field("Datas", event.occurring_at.dates, true)
-            .image(event.details.image_url);
-
-        let message_builder = CreateMessage::new().add_embed(embed.clone());
-
-        channel_id
-            .send_message(&self.client.http, message_builder)
-            .await
-            .map_err(|err| {
-                error!("Failed sending event '{}' due to '{}'", event.title, err);
-                DiscordError::Api
-            })
+            .image(event.details.image_url)
     }
 
     pub async fn add_custom_reaction(&self, message: &Message, emoji: &EmojiConfig) {
@@ -575,31 +585,21 @@ impl DiscordAPI {
         }
     }
 
-    /// Sends a review DM identical in format to `send_user_review_in_dm`, but with an
-    /// explicit comment string instead of reading the user's last DM message.
-    /// Used to backfill historical reviews that predate (or bypassed) the normal
-    /// reaction -> DM flow.
     pub async fn send_backfill_review(
         &self,
         user_id: UserId,
         event_url: &str,
         vote_emoji: &EmojiConfig,
         comment: Option<&str>,
-        channel_ids: &[ChannelId],
+        venue_ticket_shop_url: &HashMap<String, String>,
+        ticket_shop_icon_url: &str,
     ) -> Result<bool, ()> {
-        let mut event_embed = None;
-
-        for channel_id in channel_ids {
-            if let Some(found) = self.find_event_embed(*channel_id, event_url).await {
-                event_embed = Some(found);
-                break;
-            }
-        }
-
-        let Some(event_embed) = event_embed else {
-            warn!("Could not find event message for url '{}'", event_url);
+        let Some(event) = AgendaCulturalAPI::scrape_event(event_url).await else {
+            warn!("Could not scrape event details for '{}'", event_url);
             return Ok(false);
         };
+
+        let ticket_shop_url = venue_ticket_shop_url.get(&event.venue).cloned();
 
         let dm = match user_id.create_dm_channel(&self.client.http).await {
             Ok(dm) => dm,
@@ -618,7 +618,13 @@ impl DiscordAPI {
             Ok(false) => {}
         }
 
-        let embed = Self::create_user_review_embed(vote_emoji, event_embed, comment);
+        let mut embed =
+            Self::build_event_embed(event, ticket_shop_url, ticket_shop_icon_url)
+                .field("Voto", vote_emoji.to_string(), true);
+
+        if let Some(comment) = comment {
+            embed = embed.field("Comentários", comment, true);
+        }
 
         match dm
             .send_message(&self.client.http, CreateMessage::new().embed(embed))
@@ -781,23 +787,6 @@ impl DiscordAPI {
                 false
             }
         }
-    }
-
-    async fn find_event_embed(&self, channel_id: ChannelId, event_url: &str) -> Option<Embed> {
-        let guild = self.get_guild(channel_id).await;
-        let threads = self.get_channel_threads(&guild, channel_id).await;
-
-        for thread in threads {
-            let messages = self.get_all_messages(thread.id).await;
-
-            if let Some(message) = messages.into_iter().find(|m| {
-                m.embeds.first().and_then(|e| e.url.clone()).as_deref() == Some(event_url)
-            }) {
-                return message.embeds.into_iter().next();
-            }
-        }
-
-        None
     }
 
     async fn get_user_last_comment(&self, dm: &PrivateChannel) -> Option<Message> {

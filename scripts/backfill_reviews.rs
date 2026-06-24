@@ -33,7 +33,6 @@ async fn main() {
 
     let config = load_config();
     let discord = DiscordAPI::default().await;
-    let channel_ids = [config.teatro_channel_id, config.artes_channel_id];
     let total = records.len();
 
     async {
@@ -55,11 +54,18 @@ async fn main() {
             let vote_emoji = &config.voting_emojis[(record.rating - 1) as usize];
 
             match discord
-                .send_backfill_review(user_id, &record.url, vote_emoji, comment, &channel_ids)
+                .send_backfill_review(
+                    user_id,
+                    &record.url,
+                    vote_emoji,
+                    comment,
+                    &config.venue_ticket_shop_url,
+                    &config.ticket_shop_icon_url,
+                )
                 .await
             {
                 Ok(true) => info!("Sent review for {}", record.url),
-                Ok(false) => warn!("Skipped (already sent or event not found): {}", record.url),
+                Ok(false) => warn!("Skipped (already sent): {}", record.url),
                 Err(_) => error!("Failed to send review for {}", record.url),
             }
         }

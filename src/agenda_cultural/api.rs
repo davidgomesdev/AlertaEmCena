@@ -1,5 +1,5 @@
 use super::{dto::EventResponse, model::Event};
-use crate::agenda_cultural::model::Category;
+use crate::agenda_cultural::model::{Category, EventDetails, Schedule};
 use chrono::{Datelike, NaiveDate, TimeDelta, Utc};
 use futures::TryFutureExt;
 use lazy_static::lazy_static;
@@ -32,6 +32,10 @@ lazy_static! {
         .build();
     static ref EVENT_DESCRIPTION_SELECTOR: Selector =
         Selector::parse(".entry-container > :not(.event__extra-info):not(.section-title):not(.section-title--venue):not(.venue):not(.post__share)").unwrap();
+    static ref OG_TITLE_SELECTOR: Selector = Selector::parse(r#"meta[property="og:title"]"#).unwrap();
+    static ref OG_IMAGE_SELECTOR: Selector = Selector::parse(r#"meta[property="og:image"]"#).unwrap();
+    static ref VENUE_NAME_SELECTOR: Selector = Selector::parse(".venue__name").unwrap();
+    static ref EVENT_DATES_SELECTOR: Selector = Selector::parse(".signpost__date").unwrap();
 }
 
 pub struct AgendaCulturalAPI;
@@ -215,8 +219,78 @@ impl AgendaCulturalAPI {
     fn clean_description(description: &str) -> String {
         strip_tags(description)
             .replace("&nbsp;", " ")
-            .trim_end_matches("\n")
+            .trim()
             .to_owned()
+    }
+
+    /// Scrapes title, venue, dates and image directly off the event page, for events
+    /// no longer present in the upcoming-events API (e.g. when backfilling old reviews).
+    pub async fn scrape_event(link: &str) -> Option<Event> {
+        let full_page: Result<Response, _> = REST_CLIENT.get(link).send().await;
+
+        let body = match full_page {
+            Ok(full_page) => full_page
+                .text()
+                .await
+                .inspect_err(|err| warn!("Failed to get event page text: {}", err))
+                .ok()?,
+            Err(err) => {
+                warn!("Failed to get event page: {:?}", err);
+                return None;
+            }
+        };
+
+        let description = Self::extract_full_description(&body).unwrap_or_else(|| {
+            warn!("Unable to extract description for '{}'", link);
+            String::new()
+        });
+
+        let document = Html::parse_document(&body);
+
+        let title = Self::extract_meta_content(&document, &OG_TITLE_SELECTOR).unwrap_or_else(|| {
+            warn!("Unable to extract title for '{}'", link);
+            String::new()
+        });
+        let image_url = Self::extract_meta_content(&document, &OG_IMAGE_SELECTOR)
+            .unwrap_or_else(|| {
+                warn!("Unable to extract image for '{}'", link);
+                String::new()
+            });
+        let venue = Self::extract_text(&document, &VENUE_NAME_SELECTOR).unwrap_or_else(|| {
+            warn!("Unable to extract venue for '{}'", link);
+            String::new()
+        });
+        let dates = Self::extract_text(&document, &EVENT_DATES_SELECTOR).unwrap_or_else(|| {
+            warn!("Unable to extract dates for '{}'", link);
+            String::new()
+        });
+
+        Some(Event::new(
+            title,
+            EventDetails::new(String::new(), description, image_url),
+            link.to_string(),
+            Schedule::new(dates, String::new()),
+            venue,
+            Vec::new(),
+        ))
+    }
+
+    fn extract_meta_content(document: &Html, selector: &Selector) -> Option<String> {
+        document
+            .select(selector)
+            .next()
+            .and_then(|element| element.value().attr("content"))
+            .map(str::to_string)
+    }
+
+    fn extract_text(document: &Html, selector: &Selector) -> Option<String> {
+        document.select(selector).next().map(|element| {
+            element
+                .text()
+                .collect::<String>()
+                .trim()
+                .to_string()
+        })
     }
 }
 
