@@ -22,6 +22,7 @@ jobs:
             - '.github/workflows/**'
           code:
             - 'src/**'
+            - 'scripts/**'
             - 'Cargo.lock'
             - 'Cargo.toml'
             - 'Cross.toml'
