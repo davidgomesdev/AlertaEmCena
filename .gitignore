@@ -25,3 +25,4 @@ run-locally.sh
 .idea
 vote_backups
 scripts/reviews_data.json
+docs/superpowers
