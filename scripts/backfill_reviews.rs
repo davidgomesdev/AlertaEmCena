@@ -39,12 +39,19 @@ async fn main() {
     async {
         for record in records {
             if !(1..=5).contains(&record.rating) {
-                warn!("Skipping '{}': invalid rating {}", record.url, record.rating);
+                warn!(
+                    "Skipping '{}': invalid rating {}",
+                    record.url, record.rating
+                );
                 continue;
             }
 
             let comment = record.comment.trim();
-            let comment = if comment.is_empty() { None } else { Some(comment) };
+            let comment = if comment.is_empty() {
+                None
+            } else {
+                Some(comment)
+            };
             let vote_emoji = &config.voting_emojis[(record.rating - 1) as usize];
 
             match discord

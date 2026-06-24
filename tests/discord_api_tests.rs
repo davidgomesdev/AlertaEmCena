@@ -184,11 +184,8 @@ mod discord {
     #[test_log::test(tokio::test)]
     async fn should_delete_pin_notification_after_pinning() {
         let api = build_api().await;
-        let (thread_id, _, mut message) = send_random_event(
-            &api,
-            "should_delete_pin_notification_after_pinning",
-        )
-        .await;
+        let (thread_id, _, mut message) =
+            send_random_event(&api, "should_delete_pin_notification_after_pinning").await;
 
         let tester_api = build_tester_api().await;
 
@@ -236,6 +233,85 @@ mod discord {
 
         api.send_privately_users_review(&message, &voting_emojis)
             .await;
+    }
+
+    #[test_log::test(tokio::test)]
+    async fn should_rewrite_review_comment_from_dm_reply() {
+        let api = build_api().await;
+        let (_, _, message) =
+            send_random_event(&api, "should_rewrite_review_comment_from_dm_reply").await;
+
+        let voting_emojis = load_voting_emojis_config("VOTING_EMOJIS");
+
+        add_feature_reactions(&api, &message, &voting_emojis, *SAVE_FOR_LATER_EMOJI).await;
+
+        let tester_api = build_tester_api().await;
+
+        tester_api
+            .add_custom_reaction(&message, &voting_emojis[3])
+            .await;
+
+        // allows manual testing - bots can't vote on each other
+        tokio::time::sleep(Duration::from_secs(5)).await;
+
+        api.send_privately_users_review(&message, &voting_emojis)
+            .await;
+
+        let tester_dm = api
+            .own_user
+            .id
+            .create_dm_channel(&tester_api.client.http)
+            .await
+            .expect("Tester failed to open DM channel with bot");
+
+        let review_message = tester_dm
+            .messages(&tester_api.client.http, serenity::all::GetMessages::new())
+            .await
+            .expect("Tester failed to fetch DM messages")
+            .into_iter()
+            .find(|msg| {
+                msg.embeds
+                    .first()
+                    .map(|embed| embed.fields.iter().any(|field| field.name == "Voto"))
+                    .unwrap_or(false)
+            })
+            .expect("Could not find review message in tester's DM");
+
+        let new_comment = format!("Updated comment via reply - {}", uuid::Uuid::new_v4());
+
+        review_message
+            .reply(&tester_api.client.http, new_comment.clone())
+            .await
+            .expect("Tester failed to reply to review message");
+
+        let user_discord_id = serenity::all::UserId::from(*user_id);
+
+        let rewritten = api.rewrite_reviews_from_dm_replies(user_discord_id).await;
+
+        assert_eq!(rewritten, 1);
+
+        let bot_dm = user_discord_id
+            .create_dm_channel(&api.client.http)
+            .await
+            .expect("Bot failed to open DM channel with tester");
+
+        let updated_message = api
+            .client
+            .http
+            .get_message(bot_dm.id, review_message.id)
+            .await
+            .expect("Failed to refetch review message");
+
+        let comentarios_field = updated_message
+            .embeds
+            .first()
+            .expect("Updated message lost its embed")
+            .fields
+            .iter()
+            .find(|field| field.name == "Comentários")
+            .expect("Updated embed has no Comentários field");
+
+        assert_eq!(comentarios_field.value, new_comment);
     }
 
     #[test_log::test(tokio::test)]

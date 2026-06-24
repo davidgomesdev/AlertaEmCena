@@ -80,6 +80,8 @@ async fn main() {
                 }
             });
 
+            rewrite_reviews_from_replies(&discord, &users_to_backup).await;
+
             backup_votes(&discord, users_to_backup, &config.voting_emojis).await;
             info!("Starting app");
         }
@@ -155,6 +157,20 @@ async fn run(
     record_pipeline_run_duration(&category, pipeline_started_at.elapsed());
 
     users_with_reactions
+}
+
+#[instrument(skip(discord, user_ids))]
+async fn rewrite_reviews_from_replies(discord: &DiscordAPI, user_ids: &[UserId]) {
+    for user_id in user_ids {
+        let rewritten = discord.rewrite_reviews_from_dm_replies(*user_id).await;
+
+        if rewritten > 0 {
+            info!(
+                "Rewrote {} review comment(s) from DM replies for user {}",
+                rewritten, user_id
+            );
+        }
+    }
 }
 
 #[instrument(skip(discord, vote_emojis))]
@@ -335,9 +351,7 @@ async fn handle_reaction_features(
                     });
             }
 
-            discord
-                .delete_pin_notifications(thread.id, pin_count)
-                .await;
+            discord.delete_pin_notifications(thread.id, pin_count).await;
         }
         .instrument(thread_span)
         .await;
