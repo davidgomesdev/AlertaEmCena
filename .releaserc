@@ -6,7 +6,8 @@
       "@semantic-release/github",
       {
         "assets": [
-          { "path": "artifacts/alertaemcena-*" }
+          { "path": "artifacts/alertaemcena-*" },
+          { "path": "artifacts/backfill_reviews-*" }
         ]
       }
     ]
