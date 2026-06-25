@@ -3,21 +3,18 @@ mod discord_embed_color {
     use alertaemcena::discord::api::DiscordAPI;
     use serenity::all::Colour;
 
-    const FALLBACK_COLOR: Colour = Colour::new(0x005eeb);
-
-    async fn assert_dominant_color_extracted(event_url: &str) {
+    async fn assert_dominant_color_extracted(event_url: &str, expected_hex: u32) {
         let event = AgendaCulturalAPI::scrape_event(event_url)
             .await
             .unwrap_or_else(|| panic!("Failed to scrape event '{}'", event_url));
 
         let color = DiscordAPI::get_image_dominant_color(&event.details.image_url).await;
 
-        println!("Got {:?} for event '{}'", color.unwrap().hex(), event.details.image_url);
-
         match color {
-            Some(color) => assert_ne!(
-                color, FALLBACK_COLOR,
-                "Dominant color for '{}' matched the fallback color by coincidence or extraction failed silently",
+            Some(color) => assert_eq!(
+                color,
+                Colour::new(expected_hex),
+                "Dominant color for '{}' did not match expected",
                 event.details.image_url
             ),
             None => panic!(
@@ -31,26 +28,35 @@ mod discord_embed_color {
     async fn should_extract_dominant_color_for_sonho_de_uma_noite_de_verao() {
         assert_dominant_color_extracted(
             "https://www.agendalx.pt/events/event/sonho-de-uma-noite-de-verao-5/",
+            0x1B80B4,
         )
         .await;
     }
 
     #[test_log::test(tokio::test)]
     async fn should_extract_dominant_color_for_o_filho() {
-        assert_dominant_color_extracted("https://www.agendalx.pt/events/event/o-filho-2/").await;
+        assert_dominant_color_extracted(
+            "https://www.agendalx.pt/events/event/o-filho-2/",
+            0x785D55,
+        )
+        .await;
     }
 
     #[test_log::test(tokio::test)]
     async fn should_extract_dominant_color_for_o_coracao_de_um_pugilista() {
         assert_dominant_color_extracted(
             "https://www.agendalx.pt/events/event/o-coracao-de-um-pugilista/",
+            0xCEB2A7,
         )
         .await;
     }
 
     #[test_log::test(tokio::test)]
     async fn should_extract_dominant_color_for_a_ratoeira() {
-        assert_dominant_color_extracted("https://www.agendalx.pt/events/event/a-ratoeira-5/")
-            .await;
+        assert_dominant_color_extracted(
+            "https://www.agendalx.pt/events/event/a-ratoeira-5/",
+            0xC07A4F,
+        )
+        .await;
     }
 }
