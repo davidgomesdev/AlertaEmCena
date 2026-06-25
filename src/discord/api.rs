@@ -57,6 +57,8 @@ pub enum DiscordError {
     Api,
 }
 
+const FALLBACK_EMBED_COLOR: u32 = 0x005eeb;
+
 impl DiscordAPI {
     pub async fn default() -> Self {
         DiscordAPI::new(
@@ -140,7 +142,7 @@ impl DiscordAPI {
         let embed_description = Self::truncate_embed_description(description);
         let color = Self::get_image_dominant_color(&event.details.image_url)
             .await
-            .unwrap_or(Colour::new(0x005eeb));
+            .unwrap_or_else(|| Colour::new(FALLBACK_EMBED_COLOR));
 
         CreateEmbed::new()
             .title(event.title)
@@ -168,13 +170,25 @@ impl DiscordAPI {
             .to_rgba8();
 
         let palette =
-            color_thief::get_palette(rgba.as_raw(), color_thief::ColorFormat::Rgba, 10, 5)
+            color_thief::get_palette(rgba.as_raw(), color_thief::ColorFormat::Rgba, 10, 8)
                 .map_err(|e| warn!("Failed extracting palette for '{}': {:?}", image_url, e))
                 .ok()?;
 
-        palette
-            .first()
-            .map(|c| Colour::from_rgb(c.r, c.g, c.b))
+        let dominant = palette
+            .iter()
+            .find(|c| Self::is_colorful(c.r, c.g, c.b))
+            .or_else(|| palette.first())?;
+
+        Some(Colour::from_rgb(dominant.r, dominant.g, dominant.b))
+    }
+
+    /// Excludes near-grayscale colors so a vivid palette entry wins over a washed-out background.
+    fn is_colorful(r: u8, g: u8, b: u8) -> bool {
+        const SATURATION_THRESHOLD: u8 = 30;
+        let max = r.max(g).max(b);
+        let min = r.min(g).min(b);
+
+        max - min > SATURATION_THRESHOLD
     }
 
     pub async fn add_custom_reaction(&self, message: &Message, emoji: &EmojiConfig) {
