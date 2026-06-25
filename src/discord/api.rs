@@ -107,7 +107,7 @@ impl DiscordAPI {
         info!(channel_id = %channel_id, event = %event.title, "Sending event");
 
         let title = event.title.clone();
-        let embed = Self::build_event_embed(event, ticket_shop_url, ticket_shop_icon_url);
+        let embed = Self::build_event_embed(event, ticket_shop_url, ticket_shop_icon_url).await;
 
         let message_builder = CreateMessage::new().add_embed(embed.clone());
 
@@ -120,7 +120,7 @@ impl DiscordAPI {
             })
     }
 
-    fn build_event_embed(
+    async fn build_event_embed(
         event: Event,
         ticket_shop_url: Option<String>,
         ticket_shop_icon_url: &str,
@@ -138,15 +138,43 @@ impl DiscordAPI {
         }
 
         let embed_description = Self::truncate_embed_description(description);
+        let color = Self::get_image_dominant_color(&event.details.image_url)
+            .await
+            .unwrap_or(Colour::new(0x005eeb));
 
         CreateEmbed::new()
             .title(event.title)
             .url(event.link)
             .description(embed_description)
             .author(author)
-            .color(Colour::new(0x005eeb))
+            .color(color)
             .field("Datas", event.occurring_at.dates, true)
             .image(event.details.image_url)
+    }
+
+    pub async fn get_image_dominant_color(image_url: &str) -> Option<Colour> {
+        let bytes = reqwest::get(image_url)
+            .await
+            .map_err(|e| warn!("Failed fetching event image '{}': {}", image_url, e))
+            .ok()?
+            .bytes()
+            .await
+            .map_err(|e| warn!("Failed reading event image bytes '{}': {}", image_url, e))
+            .ok()?;
+
+        let rgba = image::load_from_memory(&bytes)
+            .map_err(|e| warn!("Failed decoding event image '{}': {}", image_url, e))
+            .ok()?
+            .to_rgba8();
+
+        let palette =
+            color_thief::get_palette(rgba.as_raw(), color_thief::ColorFormat::Rgba, 10, 5)
+                .map_err(|e| warn!("Failed extracting palette for '{}': {:?}", image_url, e))
+                .ok()?;
+
+        palette
+            .first()
+            .map(|c| Colour::from_rgb(c.r, c.g, c.b))
     }
 
     pub async fn add_custom_reaction(&self, message: &Message, emoji: &EmojiConfig) {
@@ -618,9 +646,9 @@ impl DiscordAPI {
             Ok(false) => {}
         }
 
-        let mut embed =
-            Self::build_event_embed(event, ticket_shop_url, ticket_shop_icon_url)
-                .field("Voto", vote_emoji.to_string(), true);
+        let mut embed = Self::build_event_embed(event, ticket_shop_url, ticket_shop_icon_url)
+            .await
+            .field("Voto", vote_emoji.to_string(), true);
 
         if let Some(comment) = comment {
             embed = embed.field("Comentários", comment, true);
