@@ -37,6 +37,9 @@ mod agenda_cultural {
         assert_eq!(event.venue, "Teatro Villaret");
         assert_eq!(event.occurring_at.dates, "14 março a 30 junho 2024");
         assert_eq!(event.details.description, "Três mães e uma grávida juntas num musical hilariante e ternurento onde ficamos a conhecer a poderosa amizade de quatro mulheres…");
-        assert_eq!(event.details.image_url, "https://www.agendalx.pt/content/uploads/2024/02/Maes.jpg");
+        assert_eq!(
+            event.details.image_url,
+            "https://www.agendalx.pt/content/uploads/2024/02/Maes.jpg"
+        );
     }
 }
