@@ -3,7 +3,7 @@ use crate::config::model::EmojiConfig;
 use crate::discord::api::{DiscordAPI, EventsThread};
 use chrono::NaiveDate;
 use serenity::all::{ChannelId, GuildChannel, Message, PartialGuild};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use tracing::{debug, trace};
 
 pub async fn filter_new_events_by_thread(
@@ -21,6 +21,9 @@ pub async fn filter_new_events_by_thread(
 
     trace!("Getting sent events");
     let sent_events = get_sent_events(discord, &threads).await;
+    // the agenda cultural API has returned the same event twice before for the same month
+    // but we're dedup'ing across months, just in case
+    let mut unique_unsent_events = HashSet::new();
 
     threads_by_month
         .into_iter()
@@ -28,6 +31,7 @@ pub async fn filter_new_events_by_thread(
             let unsent_events = events_by_month[&date]
                 .iter()
                 .filter(|&e| !sent_events.contains(&e.link))
+                .filter(|event| unique_unsent_events.insert(event.link.clone()))
                 .cloned()
                 .collect();
 
@@ -36,19 +40,19 @@ pub async fn filter_new_events_by_thread(
         .collect()
 }
 
-async fn get_sent_events(discord: &DiscordAPI, threads: &[GuildChannel]) -> Vec<String> {
-    let mut sent_events = Vec::new();
+async fn get_sent_events(discord: &DiscordAPI, threads: &[GuildChannel]) -> HashSet<String> {
+    let mut sent_events = HashSet::new();
 
     for thread in threads.iter() {
-        let mut thread_events = discord.get_event_urls_sent(thread.id).await;
-
-        sent_events.append(&mut thread_events);
+        let thread_events = discord.get_event_urls_sent(thread.id).await;
 
         debug!(
             "Thread '{}' has {} sent events",
             thread.name,
-            sent_events.len()
+            thread_events.len()
         );
+
+        sent_events.extend(thread_events);
     }
     sent_events
 }

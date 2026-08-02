@@ -413,6 +413,66 @@ mod discord {
             assert!(find_result.is_none());
         }
 
+        #[test_log::test(tokio::test)]
+        async fn api_should_filter_duplicate_events_in_the_same_month() {
+            let api = build_api().await;
+            let date = NaiveDate::from_ymd_opt(2023, 2, 1).unwrap();
+            let (link, event, _) =
+                generate_random_event("api_should_filter_duplicate_events_in_the_same_month");
+            let (unique_link, unique_event, _) = generate_random_event(
+                "api_should_filter_duplicate_events_in_the_same_month_unique",
+            );
+            let events: BTreeMap<NaiveDate, Vec<Event>> =
+                BTreeMap::from([(date, Vec::from([event.clone(), event, unique_event]))]);
+
+            let events = filter_new_events_by_thread(
+                &api,
+                &api.get_guild(*channel_id).await,
+                events,
+                *channel_id,
+            )
+            .await;
+
+            assert_eq!(count_new_events(&link, &events), 1);
+            assert_eq!(count_new_events(&unique_link, &events), 1);
+        }
+
+        #[test_log::test(tokio::test)]
+        async fn api_should_filter_duplicate_events_across_months() {
+            let api = build_api().await;
+            let date = NaiveDate::from_ymd_opt(2023, 3, 1).unwrap();
+            let (link, event, _) =
+                generate_random_event("api_should_filter_duplicate_events_across_months");
+            let (unique_link, unique_event, _) =
+                generate_random_event("api_should_filter_duplicate_events_across_months_unique");
+            let events: BTreeMap<NaiveDate, Vec<Event>> = BTreeMap::from([
+                (date, Vec::from([event.clone()])),
+                (
+                    date.add(TimeDelta::weeks(12)),
+                    Vec::from([event, unique_event]),
+                ),
+            ]);
+
+            let events = filter_new_events_by_thread(
+                &api,
+                &api.get_guild(*channel_id).await,
+                events,
+                *channel_id,
+            )
+            .await;
+
+            assert_eq!(count_new_events(&link, &events), 1);
+            assert_eq!(count_new_events(&unique_link, &events), 1);
+        }
+
+        fn count_new_events(link: &str, events: &BTreeMap<EventsThread, Vec<Event>>) -> usize {
+            events
+                .values()
+                .flatten()
+                .filter(|event| event.link == link)
+                .count()
+        }
+
         fn find_new_unique_event(
             link: &str,
             events: BTreeMap<EventsThread, Vec<Event>>,

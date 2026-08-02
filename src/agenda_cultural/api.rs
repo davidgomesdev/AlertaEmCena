@@ -247,12 +247,13 @@ impl AgendaCulturalAPI {
 
         let document = Html::parse_document(&body);
 
-        let title = Self::extract_meta_content(&document, &OG_TITLE_SELECTOR).unwrap_or_else(|| {
-            warn!("Unable to extract title for '{}'", link);
-            String::new()
-        });
-        let image_url = Self::extract_meta_content(&document, &OG_IMAGE_SELECTOR)
-            .unwrap_or_else(|| {
+        let title =
+            Self::extract_meta_content(&document, &OG_TITLE_SELECTOR).unwrap_or_else(|| {
+                warn!("Unable to extract title for '{}'", link);
+                String::new()
+            });
+        let image_url =
+            Self::extract_meta_content(&document, &OG_IMAGE_SELECTOR).unwrap_or_else(|| {
                 warn!("Unable to extract image for '{}'", link);
                 String::new()
             });
@@ -284,13 +285,10 @@ impl AgendaCulturalAPI {
     }
 
     fn extract_text(document: &Html, selector: &Selector) -> Option<String> {
-        document.select(selector).next().map(|element| {
-            element
-                .text()
-                .collect::<String>()
-                .trim()
-                .to_string()
-        })
+        document
+            .select(selector)
+            .next()
+            .map(|element| element.text().collect::<String>().trim().to_string())
     }
 }
 
