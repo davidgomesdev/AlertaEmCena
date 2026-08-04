@@ -386,11 +386,21 @@ async fn send_new_events(
                 .thread_id
                 .name(&discord.client.http)
                 .await
-                .unwrap_or_default()
+                .unwrap_or_else(|_| "no name".to_string())
         );
 
-        for event in events {
+        for mut event in events {
             async {
+                match AgendaCulturalAPI::get_full_description(&event.link).await {
+                    Some(description) => event.details.description = description,
+                    None => warn!(
+                        event = event.link,
+                        preview_description = event.details.description,
+                        "Unable to get full description of '{}'. Using only preview description",
+                        event.link
+                    ),
+                }
+
                 let ticket_url = config.venue_ticket_shop_url.get(&event.venue).cloned();
                 let send_started_at = Instant::now();
                 let message = match discord

@@ -10,7 +10,7 @@ use reqwest_retry::Jitter::Bounded;
 use reqwest_retry::RetryTransientMiddleware;
 use scraper::{Html, Selector};
 use std::cmp::Ordering;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::ops::Add;
 use std::time::Duration;
 use strum::Display;
@@ -22,7 +22,14 @@ const EVENT_TYPE: &str = "event";
 const DATE_PRINT_FORMAT: &str = "%Y-%m-%d";
 
 lazy_static! {
-    static ref REST_CLIENT: ClientWithMiddleware = ClientBuilder::new(Client::new())
+    static ref REST_CLIENT: ClientWithMiddleware = ClientBuilder::new(
+        Client::builder()
+            .timeout(Duration::from_secs(60))
+            .connect_timeout(Duration::from_secs(10))
+            .read_timeout(Duration::from_secs(30))
+            .build()
+            .expect("Failed building the HTTP client")
+        )
         .with(RetryTransientMiddleware::new_with_policy(
             ExponentialBackoff::builder()
                 .jitter(Bounded)
@@ -60,7 +67,7 @@ impl AgendaCulturalAPI {
         }
 
         let category: &'static str = category.into();
-        let parsed_response = Self::get_events_by_category(amount_per_page, category)
+        let mut parsed_response = Self::get_events_by_category(amount_per_page, category)
             .await
             .inspect_err(|err| {
                 error!("Failed to get events by category '{}': {}", category, err)
@@ -68,9 +75,27 @@ impl AgendaCulturalAPI {
 
         info!("Fetched {} events", parsed_response.len());
 
+        // the agenda cultural API has returned the same event more than once before
+
+        Self::dedupe_events(&mut parsed_response);
+
         let events = Self::parse_events_by_date(parsed_response).await;
 
         Ok(events)
+    }
+
+    fn dedupe_events(parsed_response: &mut Vec<EventResponse>) {
+        let mut seen_links = HashSet::new();
+        let fetched_count = parsed_response.len();
+
+        parsed_response.retain(|event| seen_links.insert(event.link.clone()));
+
+        if parsed_response.len() != fetched_count {
+            warn!(
+                "Dropped {} duplicated events from the API response",
+                fetched_count - parsed_response.len()
+            );
+        }
     }
 
     async fn parse_events_by_date(response: Vec<EventResponse>) -> BTreeMap<NaiveDate, Vec<Event>> {
@@ -134,21 +159,12 @@ impl AgendaCulturalAPI {
         }
     }
 
+    /// Full description is pulled only for the events that survive filtering
+    /// (see `get_full_description`).
     async fn convert_response_to_model(response: &EventResponse) -> Event {
-        let description = Self::get_full_description(&response.link)
+        response
+            .to_model(Self::clean_description(&response.description.concat()))
             .await
-            .unwrap_or_else(|| {
-                let preview_description = Self::clean_description(&response.description.concat());
-
-                warn!(
-                    "Unable to get full description. Using only preview description ({})",
-                    preview_description
-                );
-
-                preview_description
-            });
-
-        response.to_model(description).await
     }
 
     #[instrument]
@@ -176,7 +192,7 @@ impl AgendaCulturalAPI {
         serde_json::from_str::<Vec<EventResponse>>(&json_response).map_err(APIError::ParseError)
     }
 
-    async fn get_full_description(link: &str) -> Option<String> {
+    pub async fn get_full_description(link: &str) -> Option<String> {
         let full_page: Result<Response, _> = REST_CLIENT.get(link).send().await;
 
         match full_page {
