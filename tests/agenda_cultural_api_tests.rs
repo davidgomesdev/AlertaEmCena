@@ -2,6 +2,10 @@ mod agenda_cultural {
     use alertaemcena::agenda_cultural::api::AgendaCulturalAPI;
     use alertaemcena::agenda_cultural::model::{Category, Event};
 
+    // ignored since 2026-08-04: the agendalx events endpoint answers `[]` to every query (after
+    // taking ~60s), so these can't tell a broken scrape from a broken site. Run them with
+    // `cargo test -- --ignored` to check whether it recovered.
+    #[ignore]
     #[test_log::test(tokio::test)]
     async fn should_scrape_teatro_events() {
         let res: Vec<Event> = AgendaCulturalAPI::get_events_by_month(&Category::Teatro, Some(5))
@@ -14,6 +18,8 @@ mod agenda_cultural {
         assert_eq!(res.len(), 5);
     }
 
+    // see the note on `should_scrape_teatro_events`
+    #[ignore]
     #[test_log::test(tokio::test)]
     async fn should_scrape_artes_events() {
         let res: Vec<Event> = AgendaCulturalAPI::get_events_by_month(&Category::Artes, Some(2))
