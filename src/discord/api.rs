@@ -496,7 +496,9 @@ impl DiscordAPI {
             {
                 Ok(users) => users,
                 Err(e) => {
+                    let event_url = Self::get_event_url_from_message(event_message);
                     error!(
+                        event = event_url,
                         "Failed to get reaction users for emoji '{}': {}",
                         voting_emoji.name, e
                     );
@@ -525,15 +527,23 @@ impl DiscordAPI {
             }
         });
 
+
+
         if let Some(reaction) = reaction {
             Self::has_someone_reacted(reaction)
         } else {
+            let event_url = Self::get_event_url_from_message(event_message);
             warn!(
+                event = event_url,
                 "Message does not have reaction emoji '{}'!",
                 voting_emoji.name
             );
             false
         }
+    }
+
+    fn get_event_url_from_message(event_message: &Message) -> String {
+        event_message.embeds.first().map(|e| e.url.clone()).flatten().unwrap_or_else(|| "link unavailable".to_string())
     }
 
     fn message_has_bot_reaction(reactions: &[MessageReaction], emoji_char: &str) -> bool {
@@ -558,7 +568,8 @@ impl DiscordAPI {
         if let Some(reaction) = reaction {
             Self::has_someone_reacted(reaction)
         } else {
-            warn!("Message does not have saved for later emoji!");
+            let event_url = Self::get_event_url_from_message(event_message);
+            warn!(event = event_url, "Message does not have saved for later emoji!");
             false
         }
     }
@@ -581,10 +592,11 @@ impl DiscordAPI {
         event_embed: Embed,
         dm: &PrivateChannel,
     ) {
+        let event_url = event_embed.url.clone().unwrap_or_else(|| "no url available".to_string());
         info!(
             user_name = %dm.recipient.name,
             vote_emoji = %vote_emoji,
-            event = %event_embed.title.as_deref().unwrap_or("no_title"),
+            event = %event_url,
             "Sending vote"
         );
 
