@@ -135,9 +135,14 @@ lazy_static! {
         .with_description("Duration of reaction processing phase")
         .with_unit("s")
         .init();
-    static ref GET_EVENTS_BY_MONTH_DURATION_SECONDS: Histogram<f64> = METER
-        .f64_histogram("aec_get_events_by_month_duration_seconds")
-        .with_description("Duration of AgendaCulturalAPI::get_events_by_month call")
+    static ref EVENTS_FETCH_DURATION_SECONDS: Histogram<f64> = METER
+        .f64_histogram("aec_events_fetch_duration_seconds")
+        .with_description("Duration of fetching the events from the agenda API")
+        .with_unit("s")
+        .init();
+    static ref EVENTS_PARSE_DURATION_SECONDS: Histogram<f64> = METER
+        .f64_histogram("aec_events_parse_duration_seconds")
+        .with_description("Duration of parsing the fetched events into models")
         .with_unit("s")
         .init();
     static ref DM_REVIEW_SENT_TOTAL: Counter<u64> = METER
@@ -192,8 +197,12 @@ pub fn record_reaction_processing_duration(category: &Category, duration: Durati
     REACTION_PROCESSING_DURATION_SECONDS.record(duration.as_secs_f64(), &[category.into()]);
 }
 
-pub fn record_get_events_by_month_duration(category: &Category, duration: Duration) {
-    GET_EVENTS_BY_MONTH_DURATION_SECONDS.record(duration.as_secs_f64(), &[category.into()]);
+pub fn record_events_fetch_duration(category: &Category, duration: Duration) {
+    EVENTS_FETCH_DURATION_SECONDS.record(duration.as_secs_f64(), &[category.into()]);
+}
+
+pub fn record_events_parse_duration(category: &Category, duration: Duration) {
+    EVENTS_PARSE_DURATION_SECONDS.record(duration.as_secs_f64(), &[category.into()]);
 }
 
 pub fn record_dm_review_sent(result: MetricResult) {

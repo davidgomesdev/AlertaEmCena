@@ -1,5 +1,6 @@
 use super::{dto::EventResponse, model::Event};
 use crate::agenda_cultural::model::{Category, EventDetails, Schedule};
+use crate::metrics::{record_events_fetch_duration, record_events_parse_duration};
 use chrono::{Datelike, NaiveDate, TimeDelta, Utc};
 use futures::TryFutureExt;
 use lazy_static::lazy_static;
@@ -12,7 +13,7 @@ use scraper::{Html, Selector};
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, HashSet};
 use std::ops::Add;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use strum::Display;
 use tracing::{debug, error, info, instrument, trace, warn};
 use voca_rs::strip::strip_tags;
@@ -66,12 +67,17 @@ impl AgendaCulturalAPI {
             }
         }
 
-        let category: &'static str = category.into();
-        let mut parsed_response = Self::get_events_by_category(amount_per_page, category)
+        let category_name: &'static str = category.into();
+        let fetch_started_at = Instant::now();
+        let mut parsed_response = Self::get_events_by_category(amount_per_page, category_name)
             .await
             .inspect_err(|err| {
-                error!("Failed to get events by category '{}': {}", category, err)
+                error!(
+                    "Failed to get events by category '{}': {}",
+                    category_name, err
+                )
             })?;
+        record_events_fetch_duration(category, fetch_started_at.elapsed());
 
         info!("Fetched {} events", parsed_response.len());
 
@@ -79,7 +85,9 @@ impl AgendaCulturalAPI {
 
         Self::dedupe_events(&mut parsed_response);
 
+        let parse_started_at = Instant::now();
         let events = Self::parse_events_by_date(parsed_response).await;
+        record_events_parse_duration(category, parse_started_at.elapsed());
 
         Ok(events)
     }
@@ -108,6 +116,8 @@ impl AgendaCulturalAPI {
             events_by_date.keys().cloned().collect::<Vec<NaiveDate>>()
         );
 
+        let mut parsed_count = 0;
+
         for response in response
             .iter()
             .filter(|event| event.start_date != NaiveDate::MIN)
@@ -126,9 +136,18 @@ impl AgendaCulturalAPI {
                 );
                 events_by_date.insert(date, Vec::from([model]));
             }
+
+            trace!(event = response.link, "Added event");
+
+            // so that a slow parse is visible at the default log level
+            if parsed_count % 100 == 0 {
+                debug!("Parsed {} events so far", parsed_count);
+            }
+
+            parsed_count += 1;
         }
 
-        info!("Parsed events");
+        info!("Parsed {} events", parsed_count);
 
         events_by_date
     }
@@ -193,6 +212,7 @@ impl AgendaCulturalAPI {
     }
 
     pub async fn get_full_description(link: &str) -> Option<String> {
+        let started_at = Instant::now();
         let full_page: Result<Response, _> = REST_CLIENT.get(link).send().await;
 
         match full_page {
@@ -205,6 +225,13 @@ impl AgendaCulturalAPI {
                 if description.is_err() {
                     return None;
                 }
+
+                debug!(
+                    event = link,
+                    elapsed_ms = started_at.elapsed().as_millis() as u64,
+                    "Fetched the full page of '{}'",
+                    link
+                );
 
                 Self::extract_full_description(&description.unwrap())
             }

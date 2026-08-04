@@ -6,11 +6,10 @@ use alertaemcena::config::model::{Config, EmojiConfig};
 use alertaemcena::discord::api::{DiscordAPI, EventsThread};
 use alertaemcena::discord::backup::{backup_user_votes, VoteRecord};
 use alertaemcena::metrics::{
-    record_event_send_duration, record_event_sent, record_events_fetched,
-    record_get_events_by_month_duration, record_pipeline_error, record_pipeline_run_duration,
-    record_pipeline_run_duration_without_event_gather, record_reaction_processing_duration,
-    record_vote, record_vote_backup_duration, record_vote_backup_records, set_threads_active,
-    MetricResult, PipelineErrorKind, PipelineStage,
+    record_event_send_duration, record_event_sent, record_events_fetched, record_pipeline_error,
+    record_pipeline_run_duration, record_pipeline_run_duration_without_event_gather,
+    record_reaction_processing_duration, record_vote, record_vote_backup_duration,
+    record_vote_backup_records, set_threads_active, MetricResult, PipelineErrorKind, PipelineStage,
 };
 use alertaemcena::tracing::setup_tracing;
 use chrono::Utc;
@@ -40,12 +39,13 @@ async fn main() {
         let root_span = info_span!("main");
 
         async move {
+            info!("Starting app");
+
             let config = load_config();
 
             debug!("Loaded {:?}", config);
 
             let discord = DiscordAPI::default().await;
-
             if config.debug_config.clear_channel {
                 discord.delete_all_messages(&config.teatro_channel_id).await;
                 discord.delete_all_messages(&config.artes_channel_id).await;
@@ -83,7 +83,6 @@ async fn main() {
             rewrite_reviews_from_replies(&discord, &users_to_backup).await;
 
             backup_votes(&discord, users_to_backup, &config.voting_emojis).await;
-            info!("Starting app");
         }
         .instrument(root_span)
         .await;
@@ -120,10 +119,8 @@ async fn run(
         return users_with_reactions;
     }
 
-    let get_events_started_at = Instant::now();
     let events =
         AgendaCulturalAPI::get_events_by_month(&category, config.debug_config.event_limit).await;
-    record_get_events_by_month_duration(&category, get_events_started_at.elapsed());
 
     if let Err(err) = events {
         error!("Failed getting events. Reason: {:?}", err);
