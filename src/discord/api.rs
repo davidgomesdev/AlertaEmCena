@@ -986,7 +986,8 @@ impl DiscordAPI {
         for thread in &mut archived_threads {
             match thread
                 .edit_thread(&self.client.http, EditThread::new().archived(false))
-                .await {
+                .await
+            {
                 Ok(_) => {
                     debug!("Unarchived thread '{}'", thread.name);
                 }

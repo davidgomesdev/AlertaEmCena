@@ -21,13 +21,16 @@ use voca_rs::strip::strip_tags;
 const AGENDA_EVENTS_URL: &str = "https://www.agendalx.pt/wp-json/agendalx/v1/events";
 const EVENT_TYPE: &str = "event";
 const DATE_PRINT_FORMAT: &str = "%Y-%m-%d";
+// the events endpoint takes minutes to answer when asked for every event
+const EVENTS_REQUEST_TIMEOUT: Duration = Duration::from_secs(300);
+const PAGE_REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 
 lazy_static! {
     static ref REST_CLIENT: ClientWithMiddleware = ClientBuilder::new(
         Client::builder()
-            .timeout(Duration::from_secs(60))
+            // agendalx.pt drops requests without one
+            .user_agent(concat!("AlertaEmCena/", env!("CARGO_PKG_VERSION")))
             .connect_timeout(Duration::from_secs(10))
-            .read_timeout(Duration::from_secs(30))
             .build()
             .expect("Failed building the HTTP client")
         )
@@ -38,6 +41,7 @@ lazy_static! {
                 .build_with_total_retry_duration_and_max_retries(Duration::from_secs(30))
         ))
         .build();
+    static ref ENTRY_CONTAINER_SELECTOR: Selector = Selector::parse(".entry-container").unwrap();
     static ref EVENT_DESCRIPTION_SELECTOR: Selector =
         Selector::parse(".entry-container > :not(.event__extra-info):not(.section-title):not(.section-title--venue):not(.venue):not(.post__share)").unwrap();
     static ref OG_TITLE_SELECTOR: Selector = Selector::parse(r#"meta[property="og:title"]"#).unwrap();
@@ -199,6 +203,7 @@ impl AgendaCulturalAPI {
                 category.to_lowercase(),
                 EVENT_TYPE
             ))
+            .timeout(EVENTS_REQUEST_TIMEOUT)
             .send()
             .map_err(APIError::ErrorSending)
             .await?
@@ -213,7 +218,11 @@ impl AgendaCulturalAPI {
 
     pub async fn get_full_description(link: &str) -> Option<String> {
         let started_at = Instant::now();
-        let full_page: Result<Response, _> = REST_CLIENT.get(link).send().await;
+        let full_page: Result<Response, _> = REST_CLIENT
+            .get(link)
+            .timeout(PAGE_REQUEST_TIMEOUT)
+            .send()
+            .await;
 
         match full_page {
             Ok(full_page) => {
@@ -245,8 +254,11 @@ impl AgendaCulturalAPI {
     fn extract_full_description(full_page: &str) -> Option<String> {
         let page_html = Html::parse_fragment(full_page);
 
-        let description_elements = page_html
+        // the page repeats the whole event block once per session, so only the first one counts
+        let container = page_html.select(&ENTRY_CONTAINER_SELECTOR).next()?;
+        let description_elements = container
             .select(&EVENT_DESCRIPTION_SELECTOR)
+            .filter(|element| element.parent() == Some(*container))
             .map(|p| p.inner_html().to_string())
             .collect::<Vec<String>>();
 
@@ -269,7 +281,11 @@ impl AgendaCulturalAPI {
     /// Scrapes title, venue, dates and image directly off the event page, for events
     /// no longer present in the upcoming-events API (e.g. when backfilling old reviews).
     pub async fn scrape_event(link: &str) -> Option<Event> {
-        let full_page: Result<Response, _> = REST_CLIENT.get(link).send().await;
+        let full_page: Result<Response, _> = REST_CLIENT
+            .get(link)
+            .timeout(PAGE_REQUEST_TIMEOUT)
+            .send()
+            .await;
 
         let body = match full_page {
             Ok(full_page) => full_page
