@@ -1,7 +1,7 @@
 use alertaemcena::agenda_cultural::model::Category;
 use alertaemcena::metrics::{
-    record_dm_review_rewrite, record_get_events_by_month_duration, MetricResult, PipelineErrorKind,
-    PipelineStage,
+    record_dm_review_rewrite, record_events_fetch_duration, record_events_parse_duration,
+    MetricResult, PipelineErrorKind, PipelineStage,
 };
 use opentelemetry::KeyValue;
 use std::time::Duration;
@@ -39,8 +39,9 @@ fn should_convert_metric_dimensions_into_key_value() {
 }
 
 #[test]
-fn should_record_get_events_by_month_duration_metric() {
-    record_get_events_by_month_duration(&Category::Teatro, Duration::from_millis(250));
+fn should_record_events_fetch_and_parse_duration_metrics() {
+    record_events_fetch_duration(&Category::Teatro, Duration::from_millis(250));
+    record_events_parse_duration(&Category::Teatro, Duration::from_millis(250));
 }
 
 #[test]

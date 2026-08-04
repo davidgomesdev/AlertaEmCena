@@ -4,7 +4,7 @@ use crate::discord::api::{DiscordAPI, EventsThread};
 use chrono::NaiveDate;
 use serenity::all::{ChannelId, GuildChannel, Message, PartialGuild};
 use std::collections::{BTreeMap, HashSet};
-use tracing::{debug, trace};
+use tracing::{debug, info, trace};
 
 pub async fn filter_new_events_by_thread(
     discord: &DiscordAPI,
@@ -25,7 +25,7 @@ pub async fn filter_new_events_by_thread(
     // but we're dedup'ing across months, just in case
     let mut unique_unsent_events = HashSet::new();
 
-    threads_by_month
+    let events_by_thread: BTreeMap<EventsThread, Vec<Event>> = threads_by_month
         .into_iter()
         .map(|(date, thread)| {
             let unsent_events = events_by_month[&date]
@@ -37,7 +37,16 @@ pub async fn filter_new_events_by_thread(
 
             (thread, unsent_events)
         })
-        .collect()
+        .collect();
+
+    info!(
+        "{} of the {} fetched events are new ({} already sent)",
+        events_by_thread.values().map(Vec::len).sum::<usize>(),
+        events_by_month.values().map(Vec::len).sum::<usize>(),
+        sent_events.len()
+    );
+
+    events_by_thread
 }
 
 async fn get_sent_events(discord: &DiscordAPI, threads: &[GuildChannel]) -> HashSet<String> {
