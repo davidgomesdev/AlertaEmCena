@@ -39,6 +39,7 @@ const PORTUGUESE_MONTHS: [&str; 12] = [
     "Dezembro",
 ];
 
+const ARCHIVED_THREADS_LIMIT: u64 = 24;
 const CHILDREN_LABEL: &str = "🧸 para crianças";
 const PROCESSED_COMMENT_EMOJI: char = '✅';
 
@@ -961,22 +962,38 @@ impl DiscordAPI {
     }
 
     async fn unarchive_archived_threads(&self, channel_id: ChannelId) {
-        let mut archived_threads = channel_id
-            .get_archived_public_threads(&self.client.http, None, None)
+        let archived = channel_id
+            .get_archived_public_threads(&self.client.http, None, Some(ARCHIVED_THREADS_LIMIT))
             .await
-            .expect("Could not get archived threads")
-            .threads;
+            .expect("Could not get archived threads");
+        let mut archived_threads = archived.threads;
+
+        // a thread left archived is invisible to the month lookup, which then creates a second
+        // thread with the same name and re-sends that month's events into it
+        if archived.has_more {
+            debug!(
+                "There are more than {} archived threads, the oldest ones will stay archived",
+                ARCHIVED_THREADS_LIMIT
+            );
+        }
 
         debug!(
-            "Found archived threads: [{:?}]",
+            "Found {} archived threads: [{:?}]",
+            archived_threads.len(),
             Self::concat_thread_names(&archived_threads)
         );
 
         for thread in &mut archived_threads {
-            thread
+            match thread
                 .edit_thread(&self.client.http, EditThread::new().archived(false))
-                .await
-                .expect("Failed to unarchive archived threads!")
+                .await {
+                Ok(_) => {
+                    debug!("Unarchived thread '{}'", thread.name);
+                }
+                Err(e) => {
+                    warn!(e = %e, "Failed to unarchive archived threads!");
+                }
+            }
         }
     }
 
@@ -992,18 +1009,32 @@ impl DiscordAPI {
     ) -> EventsThread {
         let year = date.year();
         let month_in_portuguese = month_to_portuguese_display(&date);
+        let thread_name = format!("{month_in_portuguese} {year}");
 
-        for thread in threads {
-            if thread.name == format!("{month_in_portuguese} {year}") {
-                return EventsThread::new(thread.id);
-            }
+        let matching_threads: Vec<&GuildChannel> = threads
+            .iter()
+            .filter(|thread| thread.name == thread_name)
+            .collect();
+
+        if matching_threads.len() > 1 {
+            warn!(
+                "There are {} threads named '{}'! Using the newest one",
+                matching_threads.len(),
+                thread_name
+            );
         }
+
+        if let Some(thread) = matching_threads.iter().max_by_key(|thread| thread.id) {
+            return EventsThread::new(thread.id);
+        }
+
+        info!("Creating thread '{}'", thread_name);
 
         EventsThread::new(
             channel_id
                 .create_thread(
                     &self.client.http,
-                    CreateThread::new(format!("{month_in_portuguese} {year}"))
+                    CreateThread::new(thread_name)
                         .kind(ChannelType::PublicThread)
                         .auto_archive_duration(AutoArchiveDuration::OneWeek),
                 )
