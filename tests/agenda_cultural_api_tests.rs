@@ -34,18 +34,27 @@ mod agenda_cultural {
 
     #[test_log::test(tokio::test)]
     async fn should_scrape_single_event_page() {
-        let event = AgendaCulturalAPI::scrape_event("https://www.agendalx.pt/events/event/maes/")
-            .await
-            .expect("Failed to scrape event");
+        let event = AgendaCulturalAPI::scrape_event(
+            "https://www.agendalx.pt/events/event/mowgli-o-livro-da-selva/",
+        )
+        .await
+        .expect("Failed to scrape event");
 
-        assert_eq!(event.title, "Mães");
-        assert_eq!(event.link, "https://www.agendalx.pt/events/event/maes/");
-        assert_eq!(event.venue, "Teatro Villaret");
-        assert_eq!(event.occurring_at.dates, "14 março a 30 junho 2024");
-        assert_eq!(event.details.description, "Três mães e uma grávida juntas num musical hilariante e ternurento onde ficamos a conhecer a poderosa amizade de quatro mulheres…");
+        assert_eq!(event.title, "Mowgli – O Livro da Selva");
+        assert_eq!(
+            event.link,
+            "https://www.agendalx.pt/events/event/mowgli-o-livro-da-selva/"
+        );
+        assert_eq!(event.venue, "Teatro Armando Cortez");
+        assert_eq!(event.occurring_at.dates, "24 outubro 2026 a 30 maio 2027");
+        assert!(
+            event.details.description.starts_with("A selva de Rudyard Kipling ganha uma nova vida em palco com Mowgli – O Livro da Selva"),
+            "Unexpected description: {}",
+            event.details.description
+        );
         assert_eq!(
             event.details.image_url,
-            "https://www.agendalx.pt/content/uploads/2024/02/Maes.jpg"
+            "https://www.agendalx.pt/content/uploads/2026/09/foto-promo_mowgli_DSCF9921-copy-scaled.jpg"
         );
     }
 }

@@ -25,37 +25,34 @@ mod discord_embed_color {
     }
 
     #[test_log::test(tokio::test)]
-    async fn should_extract_dominant_color_for_sonho_de_uma_noite_de_verao() {
+    async fn should_extract_dominant_color_for_mil_vezes_revista() {
         assert_dominant_color_extracted(
-            "https://www.agendalx.pt/events/event/sonho-de-uma-noite-de-verao-5/",
-            0x1B80B4,
+            "https://www.agendalx.pt/events/event/mil-vezes-revista/",
+            0xDF9C6D,
         )
         .await;
     }
 
     #[test_log::test(tokio::test)]
-    async fn should_extract_dominant_color_for_o_filho() {
+    async fn should_extract_dominant_color_for_clube_dos_poetas_mortos() {
         assert_dominant_color_extracted(
-            "https://www.agendalx.pt/events/event/o-filho-2/",
-            0x785D55,
+            "https://www.agendalx.pt/events/event/clube-dos-poetas-mortos/",
+            0xB99E93,
         )
         .await;
     }
 
     #[test_log::test(tokio::test)]
-    async fn should_extract_dominant_color_for_o_coracao_de_um_pugilista() {
-        assert_dominant_color_extracted(
-            "https://www.agendalx.pt/events/event/o-coracao-de-um-pugilista/",
-            0xCEB2A7,
-        )
-        .await;
+    async fn should_extract_dominant_color_for_cock() {
+        assert_dominant_color_extracted("https://www.agendalx.pt/events/event/cock/", 0x2B2B2B)
+            .await;
     }
 
     #[test_log::test(tokio::test)]
-    async fn should_extract_dominant_color_for_a_ratoeira() {
+    async fn should_extract_dominant_color_for_branca_de_neve() {
         assert_dominant_color_extracted(
-            "https://www.agendalx.pt/events/event/a-ratoeira-5/",
-            0xC07A4F,
+            "https://www.agendalx.pt/events/event/branca-de-neve/",
+            0xBE1A18,
         )
         .await;
     }
