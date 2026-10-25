@@ -646,6 +646,7 @@ impl DiscordAPI {
         }
     }
 
+    #[allow(clippy::result_unit_err)]
     pub async fn send_backfill_review(
         &self,
         user_id: UserId,
@@ -757,6 +758,7 @@ impl DiscordAPI {
             )
     }
 
+    #[allow(clippy::result_large_err)]
     async fn fetch_all_dm_messages(
         &self,
         dm: &PrivateChannel,
@@ -877,6 +879,7 @@ impl DiscordAPI {
         }
     }
 
+    #[allow(clippy::result_large_err)]
     async fn is_event_sent_in_dm(
         &self,
         event_url: &str,
