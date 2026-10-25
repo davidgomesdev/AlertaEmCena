@@ -34,6 +34,7 @@ A second, standalone binary (`scripts/backfill_reviews.rs`) lets you inject hist
 | `src/agenda_cultural/dto.rs` | `EventResponse`: raw REST API shape + its `Deserialize` impls; `to_model` converts it to the domain `Event` |
 | `src/agenda_cultural/model.rs` | Domain types: `Event`, `EventDetails`, `Schedule`, `Category` (Teatro/Artes) |
 | `src/discord/api.rs` | `DiscordAPI` wrapper around serenity: send event embeds (`send_event`/`build_event_embed`), manage month threads, "save for later" pin reactions, vote-reaction → DM review (`send_privately_users_review`), DM-reply review rewriting (`rewrite_reviews_from_dm_replies`), and historical review backfill (`send_backfill_review`) |
+| `src/discord/presence.rs` | `DiscordPresence`: opens a gateway connection so the bot shows as online while the app runs; `go_offline` closes it at the end |
 | `src/discord/backup.rs` | Reads bot DMs to reconstruct `VoteRecord` structs and write backup JSON |
 | `src/config/` | Load all config from env vars at startup (`Config`, `EmojiConfig`, env parsing helpers) |
 | `src/api.rs` | Orchestration: filter unsent events, map events to month-threads, add reaction emojis to new posts |
