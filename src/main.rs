@@ -5,6 +5,7 @@ use alertaemcena::config::env_loader::load_config;
 use alertaemcena::config::model::{Config, EmojiConfig};
 use alertaemcena::discord::api::{DiscordAPI, EventsThread};
 use alertaemcena::discord::backup::{backup_user_votes, VoteRecord};
+use alertaemcena::discord::presence::DiscordPresence;
 use alertaemcena::metrics::{
     record_event_send_duration, record_event_sent, record_events_fetched, record_pipeline_error,
     record_pipeline_run_duration, record_pipeline_run_duration_without_event_gather,
@@ -18,6 +19,7 @@ use itertools::Itertools;
 use lazy_static::lazy_static;
 use serenity::all::{ChannelId, GuildChannel, MessageType, UserId};
 use std::collections::BTreeMap;
+use std::env;
 use std::process::exit;
 use std::time::Instant;
 use tokio::fs;
@@ -46,11 +48,19 @@ async fn main() {
             debug!("Loaded {:?}", config);
 
             let discord = DiscordAPI::default().await;
+            let presence = DiscordPresence::go_online(
+                &env::var("DISCORD_TOKEN").expect("DISCORD_TOKEN not set"),
+            )
+            .await;
+
             if config.debug_config.clear_channel {
                 discord.delete_all_messages(&config.teatro_channel_id).await;
                 discord.delete_all_messages(&config.artes_channel_id).await;
 
                 if config.debug_config.exit_after_clearing {
+                    if let Some(presence) = presence {
+                        presence.go_offline().await;
+                    }
                     exit(0)
                 }
             }
@@ -83,6 +93,10 @@ async fn main() {
             rewrite_reviews_from_replies(&discord, &users_to_backup).await;
 
             backup_votes(&discord, users_to_backup, &config.voting_emojis).await;
+
+            if let Some(presence) = presence {
+                presence.go_offline().await;
+            }
         }
         .instrument(root_span)
         .await;
