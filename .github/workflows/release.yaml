@@ -56,7 +56,8 @@ jobs:
       run: >
         cross build --release --target ${{ matrix.target }} && \
           mv target/**/release/alertaemcena alertaemcena-${{ matrix.build }} && \
-          mv target/**/release/backfill_reviews backfill_reviews-${{ matrix.build }}
+          mv target/**/release/backfill_reviews backfill_reviews-${{ matrix.build }} && \
+          mv target/**/release/vote_summary vote_summary-${{ matrix.build }}
 
     - name: 📦 - Copy artifact
       uses: actions/upload-artifact@v4
@@ -70,6 +71,13 @@ jobs:
       with:
         name: backfill_reviews-${{ matrix.build }}
         path: backfill_reviews-${{ matrix.build }}
+        if-no-files-found: error
+
+    - name: 📦 - Copy vote_summary artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: vote_summary-${{ matrix.build }}
+        path: vote_summary-${{ matrix.build }}
         if-no-files-found: error
 
   release:

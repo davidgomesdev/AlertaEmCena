@@ -61,7 +61,7 @@ Each channel (Teatro / Artes) has public threads named `"<Month PT> <Year>"` (e.
 - Input: JSON array at `scripts/reviews_data.json` (gitignored — contains personal review data) or a path passed as the first CLI arg, shaped `[{"url": "...", "rating": 1-5, "comment": "..."}]`
 - Requires `BACKFILL_USER_ID` (Discord user ID to DM) in addition to the standard env vars below
 - Skips events it already sent to that user (same dedup check as the live DM flow) and events whose page fails to scrape
-- Built and uploaded as a per-architecture release artifact alongside the main binary (see `.github/workflows/release.yaml`)
+- Built and uploaded as a per-architecture release artifact alongside the main binary (see `.github/workflows/release.yaml`); `vote_summary` is published the same way
 
 ## Required Environment Variables
 

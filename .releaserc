@@ -7,7 +7,8 @@
       {
         "assets": [
           { "path": "artifacts/alertaemcena-*" },
-          { "path": "artifacts/backfill_reviews-*" }
+          { "path": "artifacts/backfill_reviews-*" },
+          { "path": "artifacts/vote_summary-*" }
         ]
       }
     ]
