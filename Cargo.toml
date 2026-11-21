@@ -7,6 +7,10 @@ edition = "2021"
 name = "backfill_reviews"
 path = "scripts/backfill_reviews.rs"
 
+[[bin]]
+name = "vote_summary"
+path = "scripts/vote_summary.rs"
+
 [dependencies]
 # Rust++
 voca_rs = "1.15.2"
