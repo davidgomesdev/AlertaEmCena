@@ -33,13 +33,7 @@ async fn main() {
             };
 
             for (index, count) in counts.iter().enumerate() {
-                println!(
-                    "{} ({}): {} votes ({}%)",
-                    index + 1,
-                    config.voting_emojis[index],
-                    count,
-                    percent(*count)
-                );
+                println!("- {}: {} votes ({}%)", index + 1, count, percent(*count));
             }
 
             let positive: u32 = counts[2..].iter().sum();
