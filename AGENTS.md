@@ -41,6 +41,7 @@ A second, standalone binary (`scripts/backfill_reviews.rs`) lets you inject hist
 | `src/main.rs` | Entry point: runs Teatro + Artes pipelines, then triggers vote backup |
 | `src/metrics.rs` | OTel metric recorders (events sent/fetched, DM reviews sent, pipeline errors, etc.) |
 | `src/tracing.rs` | Sets up stdout + optional Grafana Loki + OTLP tracing/metrics |
+| `scripts/vote_summary.rs` | Standalone bin: `vote_summary <user_id>` walks all of a user's DMs with the bot (paginated) via `count_user_votes` and prints how many votes each rating got. Reads the "Voto" field, falling back to the bold `**Voto:**` description line for old reviews |
 | `scripts/backfill_reviews.rs` | Standalone bin: reads a JSON array of `{url, rating, comment}` and sends each as a DM review via `send_backfill_review` |
 
 ### Key data flow
