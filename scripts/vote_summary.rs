@@ -23,15 +23,33 @@ async fn main() {
 
     match count_user_votes(&discord, user_id, &config.voting_emojis).await {
         Some(counts) => {
+            let total: u32 = counts.iter().sum();
+            let percent = |count: u32| {
+                if total == 0 {
+                    0
+                } else {
+                    (count as f64 * 100.0 / total as f64).round() as u32
+                }
+            };
+
             for (index, count) in counts.iter().enumerate() {
                 println!(
-                    "{} ({}): {} votes",
+                    "{} ({}): {} votes ({}%)",
                     index + 1,
                     config.voting_emojis[index],
-                    count
+                    count,
+                    percent(*count)
                 );
             }
-            println!("Total: {} votes", counts.iter().sum::<u32>());
+
+            let positive: u32 = counts[2..].iter().sum();
+
+            println!("Total: {} votes", total);
+            println!(
+                "Positive (>= 3): {} votes ({}%)",
+                positive,
+                percent(positive)
+            );
         }
         None => eprintln!("Failed to count votes, check the logs"),
     }
