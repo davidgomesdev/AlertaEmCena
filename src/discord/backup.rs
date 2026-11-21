@@ -107,14 +107,21 @@ pub fn parse_user_vote(embed: &Embed) -> Option<UserVote> {
     }
 }
 
+/// A piece the user rated, with its rating (1 = worst, 5 = best).
+#[derive(Debug)]
+pub struct RatedPiece {
+    pub title: String,
+    pub rating: usize,
+}
+
 /// Goes through every message in the user's DM (paginating past Discord's 100 limit)
-/// and counts how many votes each rating got. Index 0 is the worst rating.
+/// and returns every piece they rated, newest first. Votes matching no voting emoji are skipped.
 #[instrument(skip(discord, vote_emojis))]
-pub async fn count_user_votes(
+pub async fn fetch_rated_pieces(
     discord: &DiscordAPI,
     user_id: UserId,
     vote_emojis: &[EmojiConfig; 5],
-) -> Option<[u32; 5]> {
+) -> Option<Vec<RatedPiece>> {
     let dm_channel = match user_id.create_dm_channel(&discord.client.http).await {
         Ok(channel) => channel,
         Err(err) => {
@@ -123,7 +130,7 @@ pub async fn count_user_votes(
         }
     };
 
-    let mut votes: Vec<UserVote> = Vec::new();
+    let mut pieces: Vec<RatedPiece> = Vec::new();
     let mut before = None;
 
     loop {
@@ -145,39 +152,44 @@ pub async fn count_user_votes(
         };
         before = Some(oldest.id);
 
-        votes.extend(
+        pieces.extend(
             page.iter()
                 .filter(|message| {
                     message.author.id == discord.own_user.id && message.kind == MessageType::Regular
                 })
                 .filter_map(|message| message.embeds.first())
-                .filter_map(parse_user_vote),
+                .filter_map(|embed| {
+                    let vote = parse_user_vote(embed)?.vote;
+                    let Some(index) = vote_emojis
+                        .iter()
+                        .position(|emoji| emoji.to_string() == vote.trim())
+                    else {
+                        error!("Unrecognized vote value: {}", vote);
+                        return None;
+                    };
+
+                    Some(RatedPiece {
+                        title: embed
+                            .title
+                            .clone()
+                            .unwrap_or_else(|| "No Title".to_string()),
+                        rating: index + 1,
+                    })
+                }),
         );
     }
 
-    info!("Found {} votes", votes.len());
+    info!("Found {} votes", pieces.len());
 
-    Some(tally_votes(
-        votes.iter().map(|vote| vote.vote.as_str()),
-        vote_emojis,
-    ))
+    Some(pieces)
 }
 
-/// Counts votes per rating; votes not matching any voting emoji are ignored.
-pub fn tally_votes<'a>(
-    votes: impl IntoIterator<Item = &'a str>,
-    vote_emojis: &[EmojiConfig; 5],
-) -> [u32; 5] {
+/// Counts pieces per rating. Index 0 is the worst rating.
+pub fn count_by_rating(pieces: &[RatedPiece]) -> [u32; 5] {
     let mut counts = [0u32; 5];
 
-    for vote in votes {
-        match vote_emojis
-            .iter()
-            .position(|emoji| emoji.to_string() == vote.trim())
-        {
-            Some(index) => counts[index] += 1,
-            None => error!("Unrecognized vote value: {}", vote),
-        }
+    for piece in pieces {
+        counts[piece.rating - 1] += 1;
     }
 
     counts
@@ -201,13 +213,6 @@ pub struct UserVote {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn emojis() -> [EmojiConfig; 5] {
-        std::array::from_fn(|i| EmojiConfig {
-            id: i as u64 + 1,
-            name: format!("e{}", i + 1),
-        })
-    }
 
     fn embed(json: serde_json::Value) -> Embed {
         serde_json::from_value(json).unwrap()
@@ -240,12 +245,13 @@ mod tests {
     }
 
     #[test]
-    fn tallies_votes_per_rating_including_zeros() {
-        let counts = tally_votes(
-            ["<:e1:1>", "<:e1:1>", "<:e2:2>", " <:e5:5> ", "unknown"],
-            &emojis(),
-        );
+    fn counts_pieces_per_rating_including_zeros() {
+        let piece = |rating| RatedPiece {
+            title: "t".to_string(),
+            rating,
+        };
+        let pieces = [piece(1), piece(1), piece(2), piece(5)];
 
-        assert_eq!(counts, [2, 1, 0, 0, 1]);
+        assert_eq!(count_by_rating(&pieces), [2, 1, 0, 0, 1]);
     }
 }

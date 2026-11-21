@@ -1,6 +1,6 @@
 use alertaemcena::config::env_loader::load_config;
 use alertaemcena::discord::api::DiscordAPI;
-use alertaemcena::discord::backup::count_user_votes;
+use alertaemcena::discord::backup::{count_by_rating, fetch_rated_pieces};
 use alertaemcena::tracing::setup_tracing;
 use serenity::all::UserId;
 
@@ -21,8 +21,19 @@ async fn main() {
     let config = load_config();
     let discord = DiscordAPI::default().await;
 
-    match count_user_votes(&discord, user_id, &config.voting_emojis).await {
-        Some(counts) => {
+    match fetch_rated_pieces(&discord, user_id, &config.voting_emojis).await {
+        Some(pieces) => {
+            for rating in 1..=5 {
+                println!("Rating {}:", rating);
+
+                for piece in pieces.iter().filter(|piece| piece.rating == rating) {
+                    println!("  - {}", piece.title);
+                }
+            }
+
+            println!();
+
+            let counts = count_by_rating(&pieces);
             let total: u32 = counts.iter().sum();
             let percent = |count: u32| {
                 if total == 0 {
